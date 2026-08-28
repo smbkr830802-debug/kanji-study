@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f7f4ee">
+<title>小3 漢字れんしゅう</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#f7f4ee;color:#292929;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif}
+body{padding-bottom:30px}
+main{max-width:1100px;margin:auto;padding:14px}
+h1{text-align:center;font-size:25px;margin:8px 0 16px}
+.card{background:#fff;border-radius:22px;padding:16px;margin:12px 0;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{border:0;border-radius:15px;background:#eeeae3;padding:12px 4px;font-size:15px;color:#292929}
+.day.active{background:#5e7a66;color:#fff}
+.day small{display:block;margin-top:3px}
+.notice{text-align:center;color:#666;padding:10px 0 2px}
+.week{text-align:center;color:#666;font-size:14px;margin-top:4px}
+.kanji{text-align:center;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:118px;line-height:1;margin:8px 0 0}
+.read{text-align:center;font-size:16px;margin:8px 0 2px}
+.example{text-align:center;color:#666;font-size:14px;margin-bottom:10px}
+.practice{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.panel{border:2px solid #ddd9d2;border-radius:18px;padding:10px}
+.panel h2{font-size:18px;margin:0 0 8px}
+.canvasWrap{position:relative;width:100%;aspect-ratio:1.15;background:#fff;border:2px solid #d8d5cf;border-radius:16px;overflow:hidden;touch-action:none}
+.traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:min(42vw,150px);color:#e7e3db;pointer-events:none;user-select:none}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none;outline:none;cursor:crosshair}
+.actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+button{font-size:16px;padding:11px 18px;border:0;border-radius:14px;background:#5e7a66;color:#fff}
+button.secondary{background:#ebe8e1;color:#292929}
+button:active{transform:scale(.98)}
+.testTitle{text-align:center;font-size:22px;margin:5px 0 8px}
+.testGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}
+.testItem{border:2px solid #ddd9d2;border-radius:15px;padding:10px 5px;text-align:center;min-height:145px;display:flex;flex-direction:column;justify-content:space-between}
+.q{font-size:15px}
+.answer{font-size:42px;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;min-height:52px}
+.score{text-align:center;font-size:28px;font-weight:700;margin:10px}
+.rest{text-align:center;padding:35px 10px;font-size:18px;color:#666}
+.small{font-size:13px;color:#777;text-align:center}
+@media(max-width:700px){.practice{grid-template-columns:1fr}.testGrid{grid-template-columns:repeat(2,1fr)}.kanji{font-size:96px}}
+</style>
+</head>
+<body>
+<main>
+<h1>📚 小3 漢字れんしゅう</h1>
+<section class="card">
+<div class="days">
+<button class="day" data-d="1">月<small>習</small></button>
+<button class="day" data-d="2">火<small>習</small></button>
+<button class="day" data-d="3">水<small>習</small></button>
+<button class="day" data-d="4">木<small>習</small></button>
+<button class="day" data-d="5">金<small>習</small></button>
+<button class="day" data-d="6">土<small>テスト</small></button>
+<button class="day" data-d="0">日<small>休み</small></button>
+</div>
+<div id="notice" class="notice"></div>
+<div id="week" class="week"></div>
+</section>
+<div id="app"></div>
+</main>
+<script>
+const KANJI = [{"k":"悪","r":"あく・わるい","w":"悪い（わるい）"},{"k":"安","r":"あん・やすい","w":"安全（あんぜん）"},{"k":"暗","r":"あん・くらい","w":"暗い（くらい）"},{"k":"医","r":"い","w":"医者（いしゃ）"},{"k":"委","r":"い・ゆだねる","w":"委員（いいん）"},{"k":"意","r":"い","w":"意味（いみ）"},{"k":"育","r":"いく・そだつ","w":"育つ（そだつ）"},{"k":"員","r":"いん","w":"店員（てんいん）"},{"k":"院","r":"いん","w":"病院（びょういん）"},{"k":"飲","r":"いん・のむ","w":"飲む（のむ）"},{"k":"運","r":"うん・はこぶ","w":"運動（うんどう）"},{"k":"泳","r":"えい・およぐ","w":"泳ぐ（およぐ）"},{"k":"駅","r":"えき","w":"駅前（えきまえ）"},{"k":"央","r":"おう","w":"中央（ちゅうおう）"},{"k":"横","r":"おう・よこ","w":"横（よこ）"},{"k":"屋","r":"おく・や","w":"本屋（ほんや）"},{"k":"温","r":"おん・あたたかい","w":"温かい（あたたかい）"},{"k":"化","r":"か・ばける","w":"変化（へんか）"},{"k":"荷","r":"か・に","w":"荷物（にもつ）"},{"k":"界","r":"かい","w":"世界（せかい）"},{"k":"開","r":"かい・ひらく","w":"開く（ひらく）"},{"k":"階","r":"かい","w":"階段（かいだん）"},{"k":"寒","r":"かん・さむい","w":"寒い（さむい）"},{"k":"感","r":"かん・かんじる","w":"感じる（かんじる）"},{"k":"漢","r":"かん","w":"漢字（かんじ）"},{"k":"館","r":"かん","w":"図書館（としょかん）"},{"k":"岸","r":"がん・きし","w":"岸（きし）"},{"k":"起","r":"き・おきる","w":"起きる（おきる）"},{"k":"期","r":"き","w":"期間（きかん）"},{"k":"客","r":"きゃく","w":"お客（おきゃく）"},{"k":"究","r":"きゅう・きわめる","w":"研究（けんきゅう）"},{"k":"急","r":"きゅう・いそぐ","w":"急ぐ（いそぐ）"},{"k":"級","r":"きゅう","w":"学級（がっきゅう）"},{"k":"宮","r":"きゅう・みや","w":"宮殿（きゅうでん）"},{"k":"球","r":"きゅう・たま","w":"地球（ちきゅう）"},{"k":"去","r":"きょ・さる","w":"去年（きょねん）"},{"k":"橋","r":"きょう・はし","w":"橋（はし）"},{"k":"業","r":"ぎょう・わざ","w":"授業（じゅぎょう）"},{"k":"曲","r":"きょく・まがる","w":"曲がる（まがる）"},{"k":"局","r":"きょく","w":"郵便局（ゆうびんきょく）"},{"k":"銀","r":"ぎん","w":"銀色（ぎんいろ）"},{"k":"区","r":"く","w":"地区（ちく）"},{"k":"苦","r":"く・くるしい","w":"苦しい（くるしい）"},{"k":"具","r":"ぐ","w":"道具（どうぐ）"},{"k":"君","r":"くん・きみ","w":"君（きみ）"},{"k":"係","r":"けい・かかり","w":"係（かかり）"},{"k":"軽","r":"けい・かるい","w":"軽い（かるい）"},{"k":"血","r":"けつ・ち","w":"血（ち）"},{"k":"決","r":"けつ・きめる","w":"決める（きめる）"},{"k":"研","r":"けん・とぐ","w":"研究（けんきゅう）"},{"k":"県","r":"けん","w":"県庁（けんちょう）"},{"k":"庫","r":"こ","w":"車庫（しゃこ）"},{"k":"湖","r":"こ・みずうみ","w":"湖（みずうみ）"},{"k":"向","r":"こう・むく","w":"向く（むく）"},{"k":"幸","r":"こう・さいわい","w":"幸福（こうふく）"},{"k":"港","r":"こう・みなと","w":"港（みなと）"},{"k":"号","r":"ごう","w":"番号（ばんごう）"},{"k":"根","r":"こん・ね","w":"根（ね）"},{"k":"祭","r":"さい・まつり","w":"祭り（まつり）"},{"k":"皿","r":"さら","w":"皿（さら）"},{"k":"仕","r":"し・つかえる","w":"仕事（しごと）"},{"k":"死","r":"し・しぬ","w":"死ぬ（しぬ）"},{"k":"使","r":"し・つかう","w":"使う（つかう）"},{"k":"始","r":"し・はじめる","w":"始める（はじめる）"},{"k":"指","r":"し・ゆび","w":"指（ゆび）"},{"k":"歯","r":"し・は","w":"歯（は）"},{"k":"詩","r":"し","w":"詩（し）"},{"k":"次","r":"じ・つぎ","w":"次（つぎ）"},{"k":"事","r":"じ・こと","w":"事（こと）"},{"k":"持","r":"じ・もつ","w":"持つ（もつ）"},{"k":"式","r":"しき","w":"式（しき）"},{"k":"実","r":"じつ・み","w":"実（み）"},{"k":"写","r":"しゃ・うつす","w":"写真（しゃしん）"},{"k":"者","r":"しゃ・もの","w":"医者（いしゃ）"},{"k":"主","r":"しゅ・おも","w":"主人（しゅじん）"},{"k":"守","r":"しゅ・まもる","w":"守る（まもる）"},{"k":"取","r":"しゅ・とる","w":"取る（とる）"},{"k":"酒","r":"しゅ・さけ","w":"酒（さけ）"},{"k":"受","r":"じゅ・うける","w":"受ける（うける）"},{"k":"州","r":"しゅう","w":"州（しゅう）"},{"k":"拾","r":"しゅう・ひろう","w":"拾う（ひろう）"},{"k":"終","r":"しゅう・おわる","w":"終わる（おわる）"},{"k":"習","r":"しゅう・ならう","w":"習う（ならう）"},{"k":"集","r":"しゅう・あつめる","w":"集める（あつめる）"},{"k":"住","r":"じゅう・すむ","w":"住む（すむ）"},{"k":"重","r":"じゅう・おもい","w":"重い（おもい）"},{"k":"宿","r":"しゅく・やど","w":"宿題（しゅくだい）"},{"k":"所","r":"しょ・ところ","w":"場所（ばしょ）"},{"k":"暑","r":"しょ・あつい","w":"暑い（あつい）"},{"k":"助","r":"じょ・たすける","w":"助ける（たすける）"},{"k":"昭","r":"しょう","w":"昭和（しょうわ）"},{"k":"消","r":"しょう・けす","w":"消す（けす）"},{"k":"商","r":"しょう・あきなう","w":"商店（しょうてん）"},{"k":"章","r":"しょう","w":"文章（ぶんしょう）"},{"k":"勝","r":"しょう・かつ","w":"勝つ（かつ）"},{"k":"乗","r":"じょう・のる","w":"乗る（のる）"},{"k":"植","r":"しょく・うえる","w":"植える（うえる）"},{"k":"申","r":"しん・もうす","w":"申す（もうす）"},{"k":"身","r":"しん・み","w":"身体（しんたい）"},{"k":"神","r":"しん・かみ","w":"神社（じんじゃ）"},{"k":"真","r":"しん・ま","w":"真実（しんじつ）"},{"k":"深","r":"しん・ふかい","w":"深い（ふかい）"},{"k":"進","r":"しん・すすむ","w":"進む（すすむ）"},{"k":"世","r":"せい・よ","w":"世界（せかい）"},{"k":"整","r":"せい・ととのえる","w":"整える（ととのえる）"},{"k":"昔","r":"せき・むかし","w":"昔（むかし）"},{"k":"全","r":"ぜん・まったく","w":"全部（ぜんぶ）"},{"k":"相","r":"そう・あい","w":"相手（あいて）"},{"k":"送","r":"そう・おくる","w":"送る（おくる）"},{"k":"想","r":"そう・おもう","w":"想像（そうぞう）"},{"k":"息","r":"そく・いき","w":"息（いき）"},{"k":"速","r":"そく・はやい","w":"速い（はやい）"},{"k":"族","r":"ぞく","w":"家族（かぞく）"},{"k":"他","r":"た・ほか","w":"他（ほか）"},{"k":"打","r":"だ・うつ","w":"打つ（うつ）"},{"k":"対","r":"たい","w":"反対（はんたい）"},{"k":"待","r":"たい・まつ","w":"待つ（まつ）"},{"k":"代","r":"だい・かえる","w":"代わる（かわる）"},{"k":"第","r":"だい","w":"第一（だいいち）"},{"k":"題","r":"だい","w":"問題（もんだい）"},{"k":"炭","r":"たん・すみ","w":"石炭（せきたん）"},{"k":"短","r":"たん・みじかい","w":"短い（みじかい）"},{"k":"談","r":"だん・はなす","w":"相談（そうだん）"},{"k":"着","r":"ちゃく・きる","w":"着る（きる）"},{"k":"注","r":"ちゅう・そそぐ","w":"注意（ちゅうい）"},{"k":"柱","r":"ちゅう・はしら","w":"柱（はしら）"},{"k":"丁","r":"ちょう・てい","w":"丁字路（ていじろ）"},{"k":"帳","r":"ちょう","w":"手帳（てちょう）"},{"k":"調","r":"ちょう・しらべる","w":"調べる（しらべる）"},{"k":"追","r":"つい・おう","w":"追う（おう）"},{"k":"定","r":"てい・さだめる","w":"決定（けってい）"},{"k":"庭","r":"てい・にわ","w":"庭（にわ）"},{"k":"笛","r":"てき・ふえ","w":"笛（ふえ）"},{"k":"鉄","r":"てつ","w":"鉄道（てつどう）"},{"k":"転","r":"てん・ころがる","w":"転ぶ（ころぶ）"},{"k":"都","r":"と・みやこ","w":"東京都（とうきょうと）"},{"k":"度","r":"ど","w":"温度（おんど）"},{"k":"投","r":"とう・なげる","w":"投げる（なげる）"},{"k":"豆","r":"とう・まめ","w":"豆（まめ）"},{"k":"島","r":"とう・しま","w":"島（しま）"},{"k":"湯","r":"とう・ゆ","w":"お湯（おゆ）"},{"k":"登","r":"とう・のぼる","w":"登る（のぼる）"},{"k":"等","r":"とう・ひとしい","w":"等しい（ひとしい）"},{"k":"動","r":"どう・うごく","w":"動く（うごく）"},{"k":"童","r":"どう・わらべ","w":"童話（どうわ）"},{"k":"農","r":"のう","w":"農業（のうぎょう）"},{"k":"波","r":"は・なみ","w":"波（なみ）"},{"k":"配","r":"はい・くばる","w":"配る（くばる）"},{"k":"倍","r":"ばい","w":"二倍（にばい）"},{"k":"箱","r":"はこ","w":"箱（はこ）"},{"k":"畑","r":"はたけ","w":"畑（はたけ）"},{"k":"発","r":"はつ・ほつ","w":"出発（しゅっぱつ）"},{"k":"反","r":"はん・そる","w":"反対（はんたい）"},{"k":"坂","r":"はん・さか","w":"坂（さか）"},{"k":"板","r":"はん・いた","w":"板（いた）"},{"k":"皮","r":"ひ・かわ","w":"皮（かわ）"},{"k":"悲","r":"ひ・かなしい","w":"悲しい（かなしい）"},{"k":"美","r":"び・うつくしい","w":"美しい（うつくしい）"},{"k":"鼻","r":"び・はな","w":"鼻（はな）"},{"k":"筆","r":"ひつ・ふで","w":"筆（ふで）"},{"k":"氷","r":"ひょう・こおり","w":"氷（こおり）"},{"k":"表","r":"ひょう・おもて","w":"表（おもて）"},{"k":"秒","r":"びょう","w":"一秒（いちびょう）"},{"k":"病","r":"びょう・やむ","w":"病気（びょうき）"},{"k":"品","r":"ひん・しな","w":"品物（しなもの）"},{"k":"負","r":"ふ・まける","w":"負ける（まける）"},{"k":"部","r":"ぶ","w":"部屋（へや）"},{"k":"服","r":"ふく","w":"服（ふく）"},{"k":"福","r":"ふく","w":"幸福（こうふく）"},{"k":"物","r":"ぶつ・もの","w":"物（もの）"},{"k":"平","r":"へい・たいら","w":"平ら（たいら）"},{"k":"返","r":"へん・かえす","w":"返す（かえす）"},{"k":"勉","r":"べん","w":"勉強（べんきょう）"},{"k":"放","r":"ほう・はなす","w":"放す（はなす）"},{"k":"味","r":"み・あじ","w":"味（あじ）"},{"k":"命","r":"めい・いのち","w":"命（いのち）"},{"k":"面","r":"めん・おもて","w":"面（おもて）"},{"k":"問","r":"もん・とう","w":"問題（もんだい）"},{"k":"役","r":"やく","w":"役割（やくわり）"},{"k":"薬","r":"やく・くすり","w":"薬（くすり）"},{"k":"由","r":"ゆ・よし","w":"理由（りゆう）"},{"k":"油","r":"ゆ・あぶら","w":"油（あぶら）"},{"k":"有","r":"ゆう・ある","w":"有名（ゆうめい）"},{"k":"遊","r":"ゆう・あそぶ","w":"遊ぶ（あそぶ）"},{"k":"予","r":"よ・あらかじめ","w":"予定（よてい）"},{"k":"羊","r":"よう・ひつじ","w":"羊（ひつじ）"},{"k":"洋","r":"よう","w":"洋服（ようふく）"},{"k":"葉","r":"よう・は","w":"葉（は）"},{"k":"陽","r":"よう","w":"太陽（たいよう）"},{"k":"様","r":"よう・さま","w":"様子（ようす）"},{"k":"落","r":"らく・おちる","w":"落ちる（おちる）"},{"k":"流","r":"りゅう・ながれる","w":"流れる（ながれる）"},{"k":"旅","r":"りょ・たび","w":"旅行（りょこう）"},{"k":"両","r":"りょう","w":"両方（りょうほう）"},{"k":"緑","r":"りょく・みどり","w":"緑（みどり）"},{"k":"礼","r":"れい","w":"礼（れい）"},{"k":"列","r":"れつ","w":"列（れつ）"},{"k":"練","r":"れん・ねる","w":"練習（れんしゅう）"},{"k":"路","r":"ろ","w":"道路（どうろ）"},{"k":"和","r":"わ・なごむ","w":"平和（へいわ）"}];
+const START = new Date("2026-08-24T00:00:00");
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today = new Date();
+const day = today.getDay();
+const midnight = new Date(today.getFullYear(),today.getMonth(),today.getDate());
+let diff = Math.floor((midnight-START)/86400000);
+let weekNo = diff < 0 ? 1 : Math.min(52, Math.floor(diff/7)+1);
+let weekIndex = weekNo-1;
+
+function weekItems(){
+  if(weekIndex < 40) return KANJI.slice(weekIndex*5, weekIndex*5+5);
+  const base = ((weekIndex-40)*17) % 200;
+  return [0,1,2,3,4].map(i=>KANJI[(base+i*7)%200]);
+}
+function save(key,val){localStorage.setItem("kanji_"+key,JSON.stringify(val))}
+function load(key,def){try{return JSON.parse(localStorage.getItem("kanji_"+key)) ?? def}catch(e){return def}}
+
+document.querySelectorAll(".day").forEach(b=>{
+  b.addEventListener("click",()=>render(Number(b.dataset.d)));
+});
+document.querySelector('.day[data-d="'+day+'"]').classList.add("active");
+$("week").textContent = weekNo<=40 ? `第${weekNo}週：新しい漢字 5字` : `第${weekNo}週：復習週`;
+render(day);
+
+function render(d){
+  document.querySelectorAll(".day").forEach(b=>b.classList.toggle("active",Number(b.dataset.d)===d));
+  const items=weekItems();
+  if(d===0){
+    $("notice").textContent="今日は休みです。前に習った漢字を自由に復習しましょう。";
+    $("app").innerHTML='<section class="card"><div class="rest">🌿 今日はお休み<br><span class="small">気になる漢字を自由に復習しましょう。</span></div></section>';
+    return;
+  }
+  if(d===6){
+    $("notice").textContent="今日はテストの日です。";
+    renderTest(items); return;
+  }
+  const item=items[d-1];
+  $("notice").textContent=`${["日","月","火","水","木","金","土"][d]}曜日：今日の1文字`;
+  renderStudy(item,d);
+}
+
+function renderStudy(item,d){
+  const key="done_"+weekNo+"_"+d;
+  const done=load(key,false);
+  $("app").innerHTML=`
+  <section class="card">
+    <div class="kanji">${esc(item.k)}</div>
+    <div class="read">${esc(item.k)}：${esc(item.r)}</div>
+    <div class="example">${esc(item.w)}</div>
+    <div class="practice">
+      <div class="panel">
+        <h2>① なぞり書き</h2>
+        <div class="canvasWrap"><div class="traceChar">${esc(item.k)}</div><canvas id="trace"></canvas></div>
+        <div class="actions"><button class="secondary" id="clearTrace">消す</button></div>
+      </div>
+      <div class="panel">
+        <h2>② 自分で書こう</h2>
+        <div class="canvasWrap"><canvas id="write"></canvas></div>
+        <div class="actions"><button class="secondary" id="clearWrite">消す</button><button id="done">できた！${done?" ✓":""}</button></div>
+      </div>
+    </div>
+    <div class="small">月〜金に1日1字。土曜は5字テスト、日曜は休みです。</div>
+  </section>`;
+  setupCanvas($("trace")); setupCanvas($("write"));
+  $("clearTrace").onclick=()=>clearCanvas($("trace"));
+  $("clearWrite").onclick=()=>clearCanvas($("write"));
+  $("done").onclick=()=>{save(key,true);$("done").textContent="できた！ ✓";};
+}
+
+function setupCanvas(c){
+  const rect=()=>c.getBoundingClientRect();
+
+  function resize(){
+    const r=rect(), dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+    c.width=Math.max(1,Math.round(r.width*dpr));
+    c.height=Math.max(1,Math.round(r.height*dpr));
+    const ctx=c.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+    ctx.lineWidth=6;
+    ctx.strokeStyle="#111";
+    ctx.fillStyle="#111";
+  }
+
+  resize();
+  window.addEventListener("resize",resize);
+
+  let drawing=false;
+  let last=null;
+  let activePointerId=null;
+
+  function pos(e){
+    const r=rect();
+    return {
+      x:Math.max(0,Math.min(r.width,e.clientX-r.left)),
+      y:Math.max(0,Math.min(r.height,e.clientY-r.top))
+    };
+  }
+
+  function start(e){
+    if(activePointerId!==null)return;
+    e.preventDefault();
+    activePointerId=e.pointerId;
+    try{c.setPointerCapture(e.pointerId)}catch(_){}
+    drawing=true;
+    last=pos(e);
+
+    // 最初の1タップでも確実に黒い点を描く
+    const ctx=c.getContext("2d");
+    ctx.beginPath();
+    ctx.arc(last.x,last.y,3,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  function move(e){
+    if(!drawing || e.pointerId!==activePointerId)return;
+    e.preventDefault();
+
+    const p=pos(e);
+    const dx=p.x-last.x, dy=p.y-last.y;
+    if(Math.abs(dx)+Math.abs(dy)<0.5)return;
+
+    const ctx=c.getContext("2d");
+    // 短い線分を連続して描き、Apple Pencilでも滑らかな線にする
+    ctx.beginPath();
+    ctx.moveTo(last.x,last.y);
+    ctx.lineTo(p.x,p.y);
+    ctx.stroke();
+    last=p;
+  }
+
+  function end(e){
+    if(e.pointerId!==activePointerId)return;
+    e.preventDefault();
+    drawing=false;
+    last=null;
+    try{c.releasePointerCapture(e.pointerId)}catch(_){}
+    activePointerId=null;
+  }
+
+  c.addEventListener("pointerdown",start,{passive:false});
+  c.addEventListener("pointermove",move,{passive:false});
+  c.addEventListener("pointerup",end,{passive:false});
+  c.addEventListener("pointercancel",end,{passive:false});
+  c.addEventListener("lostpointercapture",()=>{
+    drawing=false; last=null; activePointerId=null;
+  });
+}
+
+function clearCanvas(c){
+  const ctx=c.getContext("2d");
+  const r=c.getBoundingClientRect();
+  const dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+  ctx.clearRect(0,0,c.width,c.height);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function renderTest(items){
+  const state=load("test_"+weekNo,[false,false,false,false,false]);
+  $("app").innerHTML=`
+  <section class="card">
+    <div class="testTitle">⭐ 土曜日の5文字テスト</div>
+    <div class="small">漢字を見ないで書いてから、「答え」で答え合わせをしよう。</div>
+    <div class="testGrid">
+      ${items.map((it,i)=>`<div class="testItem"><div class="q">第${i+1}問</div><div class="answer" id="ans${i}">？</div><button data-answer="${i}">答え</button><button class="secondary" data-done="${i}">${state[i]?"✓ できた":"○ できた"}</button></div>`).join("")}
+    </div>
+    <div class="score" id="score">${state.filter(Boolean).length} / 5</div>
+    <div class="actions"><button id="showAll">答えを見る</button><button class="secondary" id="resetTest">テストをやり直す</button></div>
+  </section>`;
+  document.querySelectorAll("[data-answer]").forEach(b=>b.onclick=()=>{
+    $("ans"+b.dataset.answer).textContent=items[Number(b.dataset.answer)].k;
+  });
+  document.querySelectorAll("[data-done]").forEach(b=>b.onclick=()=>{
+    const i=Number(b.dataset.done);state[i]=!state[i];save("test_"+weekNo,state);
+    b.textContent=state[i]?"✓ できた":"○ できた";
+    $("score").textContent=state.filter(Boolean).length+" / 5";
+  });
+  $("showAll").onclick=()=>items.forEach((it,i)=>$("ans"+i).textContent=it.k);
+  $("resetTest").onclick=()=>{save("test_"+weekNo,[false,false,false,false,false]);renderTest(items)};
+}
+</script>
+</body>
+</html>
