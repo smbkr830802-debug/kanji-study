@@ -2,85 +2,217 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>漢字れんしゅう</title>
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#f7f4ee">
+<title>小3 漢字れんしゅう</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#f7f4ee;color:#292929;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
-main{max-width:850px;margin:auto;padding:18px}
-h1{text-align:center;font-size:25px}
-.card{background:#fff;border-radius:20px;padding:18px;margin-top:15px}
-.kanji{text-align:center;font:120px "Hiragino Mincho ProN","Yu Mincho",serif;margin:5px}
-.center{text-align:center}
-.canvas-wrap{position:relative;width:100%;height:min(70vw,480px);min-height:300px;margin-top:12px}
-canvas{position:absolute;inset:0;width:100%;height:100%;background:#fff;border:3px solid #bbb;border-radius:16px;touch-action:none;user-select:none;-webkit-user-select:none}
-.buttons{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
-button{font-size:17px;padding:13px 20px;border:0;border-radius:14px;background:#55765f;color:#fff}
+html,body{margin:0;min-height:100%;background:#f7f4ee;color:#292929;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
+body{padding-bottom:30px}
+main{max-width:900px;margin:auto;padding:14px}
+h1{font-size:25px;text-align:center;margin:8px 0 12px}
+.card{background:#fff;border-radius:20px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #0000000c}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.day{border:0;border-radius:12px;padding:8px 2px;background:#eeeae2;color:#333;font-size:13px}
+.day.active{background:#55765f;color:#fff}
+.day.done{outline:3px solid #c9d8cc}
+.day small{display:block;font-size:10px;margin-top:2px}
+.status{text-align:center;font-size:14px;color:#666}
+.kanji{text-align:center;font:115px "Hiragino Mincho ProN","Yu Mincho",serif;line-height:1;margin:4px}
+.reading{text-align:center;font-size:18px}
+.example{text-align:center;color:#555;line-height:1.6}
+.lesson{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.panel{border:1px solid #ddd8cf;border-radius:16px;padding:12px}
+.panel h2{font-size:18px;margin:0 0 8px}
+.trace{position:relative;height:260px;background:#fff;border:2px solid #ccc;border-radius:14px;overflow:hidden;touch-action:none}
+.trace .guide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:205px "Hiragino Mincho ProN","Yu Mincho",serif;color:#e4e0d8;pointer-events:none}
+.trace canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+button{font-size:16px;padding:11px 14px;border:0;border-radius:13px;background:#55765f;color:#fff}
 button.secondary{background:#e9e6de;color:#222}
-.note{text-align:center;color:#666;font-size:14px}
+button.warning{background:#8a6a4a}
+.buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:9px}
+.tip{text-align:center;color:#777;font-size:13px;margin:7px 0}
+.test-list{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.test-item{border:1px solid #ddd8cf;border-radius:14px;padding:10px;text-align:center}
+.test-kanji{font-size:42px;margin:4px}
+.score{text-align:center;font-size:25px;font-weight:700}
+.hidden{visibility:hidden}
+@media(max-width:650px){.lesson{grid-template-columns:1fr}.trace{height:300px}.week{gap:3px}.day{font-size:12px}.test-list{grid-template-columns:1fr 1fr}.kanji{font-size:100px}}
 </style>
 </head>
 <body>
 <main>
-<h1>📚 漢字れんしゅう</h1>
+<h1>📚 小3 漢字れんしゅう</h1>
+
 <section class="card">
-<div class="center">今日の漢字</div>
-<div class="kanji" id="answer">海</div>
-<div class="center"><b>うみ・カイ</b><br>海水（かいすい）・海外（かいがい）</div>
-<p class="note">下の白いところを、指またはApple Pencilで書いてください。</p>
-<div class="canvas-wrap"><canvas id="pad"></canvas></div>
-<div class="buttons">
-<button class="secondary" id="clear">ぜんぶ消す</button>
-<button id="hide">お手本をかくす</button>
-</div>
-<p class="note">※「お手本をかくす」を押すと、上の漢字が見えなくなります。</p>
+  <div class="week" id="week"></div>
+  <p class="status" id="status"></p>
+</section>
+
+<section class="card" id="lesson">
+  <div class="kanji" id="kanji">習</div>
+  <div class="reading" id="reading">しゅう・ならう</div>
+  <div class="example" id="example">習字（しゅうじ）・学習（がくしゅう）</div>
+  <div class="lesson">
+    <div class="panel">
+      <h2>① なぞり書き</h2>
+      <div class="trace" id="trace">
+        <div class="guide" id="guide">習</div>
+        <canvas id="traceCanvas"></canvas>
+      </div>
+      <div class="buttons">
+        <button class="secondary" onclick="clearCanvas('traceCanvas')">消す</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>② 自分で書こう</h2>
+      <div class="trace">
+        <canvas id="freeCanvas"></canvas>
+      </div>
+      <div class="buttons">
+        <button class="secondary" onclick="clearCanvas('freeCanvas')">消す</button>
+        <button onclick="markDone()">できた！</button>
+      </div>
+    </div>
+  </div>
+  <p class="tip">指でもApple Pencilでも書けます。線がはみ出しても大丈夫！</p>
+  <div class="buttons">
+    <button class="secondary" onclick="toggleGuide()">お手本をかくす</button>
+  </div>
+</section>
+
+<section class="card" id="test" style="display:none">
+  <h2 style="text-align:center">⭐ 土曜日の5文字テスト</h2>
+  <p class="status">漢字を見ないで書いてから、自分で答え合わせをしよう。</p>
+  <div class="test-list" id="testList"></div>
+  <div class="score" id="score">0 / 5</div>
+  <div class="buttons">
+    <button onclick="showAnswers()">答えを見る</button>
+    <button class="secondary" onclick="resetTest()">テストをやり直す</button>
+  </div>
 </section>
 </main>
+
 <script>
-const canvas=document.getElementById("pad");
-const ctx=canvas.getContext("2d");
-let drawing=false, lastX=0,lastY=0;
-function resizeCanvas(){
-  const rect=canvas.getBoundingClientRect();
-  const d=Math.max(1,window.devicePixelRatio||1);
-  canvas.width=Math.round(rect.width*d);
-  canvas.height=Math.round(rect.height*d);
+const weekData=[
+ {kanji:"習",reading:"しゅう・ならう",example:"習字（しゅうじ）・学習（がくしゅう）"},
+ {kanji:"詩",reading:"し・うた",example:"詩人（しじん）・詩集（ししゅう）"},
+ {kanji:"動",reading:"どう・うごく",example:"運動（うんどう）・動物（どうぶつ）"},
+ {kanji:"商",reading:"しょう・あきなう",example:"商店（しょうてん）・商品（しょうひん）"},
+ {kanji:"物",reading:"ぶつ・もの",example:"動物（どうぶつ）・食べ物（たべもの）"}
+];
+const days=["月","火","水","木","金","土","日"];
+let selected=0;
+let guideVisible=true;
+
+function todayIndex(){
+ const d=new Date().getDay(); // 0 Sun
+ if(d===0)return 6;
+ if(d===6)return 5;
+ return d-1;
+}
+selected=todayIndex();
+
+function loadDone(){
+ try{return JSON.parse(localStorage.getItem("kanjiDone")||"[]")}catch(e){return[]}
+}
+function saveDone(a){localStorage.setItem("kanjiDone",JSON.stringify(a))}
+function renderWeek(){
+ const box=document.getElementById("week"), done=loadDone();
+ box.innerHTML="";
+ days.forEach((d,i)=>{
+  const b=document.createElement("button");
+  b.className="day"+(i===selected?" active ":"")+(done.includes(i)?" done":"");
+  b.innerHTML=d+(i<5?`<small>${weekData[i].kanji}</small>`:"<small>"+(i===5?"テスト":"休み")+"</small>");
+  b.onclick=()=>{selected=i;render();};
+  box.appendChild(b);
+ });
+}
+function render(){
+ renderWeek();
+ const lesson=document.getElementById("lesson"), test=document.getElementById("test"), status=document.getElementById("status");
+ if(selected===5){
+   lesson.style.display="none";test.style.display="block";status.textContent="今日はテストの日です。";
+   renderTest();return;
+ }
+ if(selected===6){
+   lesson.style.display="none";test.style.display="none";status.textContent="今日はお休み。ゆっくり休もう！";
+   return;
+ }
+ lesson.style.display="block";test.style.display="none";
+ const x=weekData[selected];
+ document.getElementById("kanji").textContent=x.kanji;
+ document.getElementById("reading").textContent=x.reading;
+ document.getElementById("example").textContent=x.example;
+ document.getElementById("guide").textContent=x.kanji;
+ status.textContent=`${days[selected]}曜日：今日の1文字`;
+ guideVisible=true;document.getElementById("guide").style.visibility="visible";
+ setTimeout(()=>{resizeAll();clearCanvas("traceCanvas");clearCanvas("freeCanvas")},80);
+}
+function setupCanvas(id){
+ const c=document.getElementById(id),ctx=c.getContext("2d");
+ let drawing=false,last=[0,0];
+ function resize(){
+  const r=c.getBoundingClientRect(),d=Math.max(1,devicePixelRatio||1);
+  c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);
   ctx.setTransform(d,0,0,d,0,0);
-  ctx.lineWidth=6;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#222";
+  ctx.lineWidth=5;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#222";
+ }
+ function pt(e){const r=c.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top]}
+ c.addEventListener("pointerdown",e=>{
+  e.preventDefault();drawing=true;c.setPointerCapture(e.pointerId);last=pt(e);
+  ctx.beginPath();ctx.moveTo(last[0],last[1]);ctx.lineTo(last[0]+.01,last[1]+.01);ctx.stroke();
+ });
+ c.addEventListener("pointermove",e=>{
+  if(!drawing)return;e.preventDefault();
+  const q=pt(e);ctx.beginPath();ctx.moveTo(last[0],last[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();last=q;
+ });
+ const stop=e=>{drawing=false;if(e)e.preventDefault()};
+ c.addEventListener("pointerup",stop);c.addEventListener("pointercancel",stop);
+ window.addEventListener("resize",resize);resize();
 }
-function point(e){
- const r=canvas.getBoundingClientRect();
- return [e.clientX-r.left,e.clientY-r.top];
+function resizeAll(){
+ ["traceCanvas","freeCanvas"].forEach(id=>{
+  const c=document.getElementById(id),r=c.getBoundingClientRect(),d=Math.max(1,devicePixelRatio||1);
+  c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);
+  const ctx=c.getContext("2d");ctx.setTransform(d,0,0,d,0,0);ctx.lineWidth=5;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#222";
+ });
 }
-canvas.addEventListener("pointerdown",e=>{
- e.preventDefault();drawing=true;
- canvas.setPointerCapture(e.pointerId);
- [lastX,lastY]=point(e);
- ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(lastX+.01,lastY+.01);ctx.stroke();
-});
-canvas.addEventListener("pointermove",e=>{
- if(!drawing)return;e.preventDefault();
- const [x,y]=point(e);
- ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(x,y);ctx.stroke();
- lastX=x;lastY=y;
-});
-function stop(e){drawing=false;if(e) e.preventDefault();}
-canvas.addEventListener("pointerup",stop);
-canvas.addEventListener("pointercancel",stop);
-canvas.addEventListener("pointerleave",()=>{});
-document.getElementById("clear").onclick=()=>{
- const r=canvas.getBoundingClientRect();ctx.clearRect(0,0,r.width,r.height);
-};
-document.getElementById("hide").onclick=()=>{
- const a=document.getElementById("answer");
- const b=document.getElementById("hide");
- const hidden=a.style.visibility==="hidden";
- a.style.visibility=hidden?"visible":"hidden";
- b.textContent=hidden?"お手本をかくす":"お手本を表示";
-};
-window.addEventListener("resize",resizeCanvas);
-setTimeout(resizeCanvas,100);
+function clearCanvas(id){
+ const c=document.getElementById(id),r=c.getBoundingClientRect();
+ c.getContext("2d").clearRect(0,0,r.width,r.height);
+}
+function toggleGuide(){
+ guideVisible=!guideVisible;
+ document.getElementById("guide").style.visibility=guideVisible?"visible":"hidden";
+}
+function markDone(){
+ const a=loadDone();if(!a.includes(selected))a.push(selected);saveDone(a);renderWeek();
+ alert("すばらしい！今日の漢字を練習できました👏");
+}
+function renderTest(){
+ const box=document.getElementById("testList");box.innerHTML="";
+ weekData.forEach((x,i)=>{
+  const d=document.createElement("div");d.className="test-item";
+  d.innerHTML=`<div>第${i+1}問</div><div class="test-kanji hidden" id="ans${i}">${x.kanji}</div><button onclick="toggleAns(${i})">答え</button><div style="margin-top:6px"><button class="secondary" onclick="scoreOne(${i})">○ できた</button></div>`;
+  box.appendChild(d);
+ });
+ updateScore();
+}
+function toggleAns(i){document.getElementById("ans"+i).classList.toggle("hidden")}
+function scoreOne(i){
+ const a=JSON.parse(localStorage.getItem("kanjiTestScore")||"[]");
+ if(!a.includes(i))a.push(i);localStorage.setItem("kanjiTestScore",JSON.stringify(a));updateScore();
+}
+function updateScore(){
+ const a=JSON.parse(localStorage.getItem("kanjiTestScore")||"[]");
+ document.getElementById("score").textContent=`${a.length} / 5`;
+}
+function showAnswers(){weekData.forEach((_,i)=>document.getElementById("ans"+i)?.classList.remove("hidden"))}
+function resetTest(){localStorage.removeItem("kanjiTestScore");renderTest()}
+setupCanvas("traceCanvas");setupCanvas("freeCanvas");render();
 </script>
 </body>
 </html>
