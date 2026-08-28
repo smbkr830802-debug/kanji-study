@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>漢字れんしゅう</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f7f4ee;color:#292929;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic",sans-serif}
+main{max-width:850px;margin:auto;padding:18px}
+h1{text-align:center;font-size:25px}
+.card{background:#fff;border-radius:20px;padding:18px;margin-top:15px}
+.kanji{text-align:center;font:120px "Hiragino Mincho ProN","Yu Mincho",serif;margin:5px}
+.center{text-align:center}
+.canvas-wrap{position:relative;width:100%;height:min(70vw,480px);min-height:300px;margin-top:12px}
+canvas{position:absolute;inset:0;width:100%;height:100%;background:#fff;border:3px solid #bbb;border-radius:16px;touch-action:none;user-select:none;-webkit-user-select:none}
+.buttons{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+button{font-size:17px;padding:13px 20px;border:0;border-radius:14px;background:#55765f;color:#fff}
+button.secondary{background:#e9e6de;color:#222}
+.note{text-align:center;color:#666;font-size:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>📚 漢字れんしゅう</h1>
+<section class="card">
+<div class="center">今日の漢字</div>
+<div class="kanji" id="answer">海</div>
+<div class="center"><b>うみ・カイ</b><br>海水（かいすい）・海外（かいがい）</div>
+<p class="note">下の白いところを、指またはApple Pencilで書いてください。</p>
+<div class="canvas-wrap"><canvas id="pad"></canvas></div>
+<div class="buttons">
+<button class="secondary" id="clear">ぜんぶ消す</button>
+<button id="hide">お手本をかくす</button>
+</div>
+<p class="note">※「お手本をかくす」を押すと、上の漢字が見えなくなります。</p>
+</section>
+</main>
+<script>
+const canvas=document.getElementById("pad");
+const ctx=canvas.getContext("2d");
+let drawing=false, lastX=0,lastY=0;
+function resizeCanvas(){
+  const rect=canvas.getBoundingClientRect();
+  const d=Math.max(1,window.devicePixelRatio||1);
+  canvas.width=Math.round(rect.width*d);
+  canvas.height=Math.round(rect.height*d);
+  ctx.setTransform(d,0,0,d,0,0);
+  ctx.lineWidth=6;ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#222";
+}
+function point(e){
+ const r=canvas.getBoundingClientRect();
+ return [e.clientX-r.left,e.clientY-r.top];
+}
+canvas.addEventListener("pointerdown",e=>{
+ e.preventDefault();drawing=true;
+ canvas.setPointerCapture(e.pointerId);
+ [lastX,lastY]=point(e);
+ ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(lastX+.01,lastY+.01);ctx.stroke();
+});
+canvas.addEventListener("pointermove",e=>{
+ if(!drawing)return;e.preventDefault();
+ const [x,y]=point(e);
+ ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(x,y);ctx.stroke();
+ lastX=x;lastY=y;
+});
+function stop(e){drawing=false;if(e) e.preventDefault();}
+canvas.addEventListener("pointerup",stop);
+canvas.addEventListener("pointercancel",stop);
+canvas.addEventListener("pointerleave",()=>{});
+document.getElementById("clear").onclick=()=>{
+ const r=canvas.getBoundingClientRect();ctx.clearRect(0,0,r.width,r.height);
+};
+document.getElementById("hide").onclick=()=>{
+ const a=document.getElementById("answer");
+ const b=document.getElementById("hide");
+ const hidden=a.style.visibility==="hidden";
+ a.style.visibility=hidden?"visible":"hidden";
+ b.textContent=hidden?"お手本をかくす":"お手本を表示";
+};
+window.addEventListener("resize",resizeCanvas);
+setTimeout(resizeCanvas,100);
+</script>
+</body>
+</html>
