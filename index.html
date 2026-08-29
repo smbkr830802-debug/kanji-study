@@ -361,45 +361,19 @@ function renderStudy(item,d){
 
 function setupCanvas(c){
 
-  const ctx=c.getContext("2d");
+  const ctx=c.getContext("2d",{alpha:true});
 
   let drawing=false;
   let lastX=0;
   let lastY=0;
-  let activePointerId=null;
-
+  let rect=null;
 
   function resize(){
-
     const r=c.getBoundingClientRect();
-
-    const dpr=Math.max(
-      1,
-      Math.min(
-        3,
-        window.devicePixelRatio || 1
-      )
-    );
-
-    c.width=Math.max(
-      1,
-      Math.round(r.width*dpr)
-    );
-
-    c.height=Math.max(
-      1,
-      Math.round(r.height*dpr)
-    );
-
-    ctx.setTransform(
-      dpr,
-      0,
-      0,
-      dpr,
-      0,
-      0
-    );
-
+    const dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+    c.width=Math.max(1,Math.round(r.width*dpr));
+    c.height=Math.max(1,Math.round(r.height*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.lineCap="round";
     ctx.lineJoin="round";
     ctx.lineWidth=5;
@@ -407,174 +381,54 @@ function setupCanvas(c){
     ctx.fillStyle="#111";
   }
 
-
   resize();
+  window.addEventListener("resize",resize);
 
-
-  window.addEventListener(
-    "resize",
-    resize
-  );
-
-
-  function getPoint(e){
-
-    const r=c.getBoundingClientRect();
-
+  function pointFromTouch(t){
     return {
-      x:Math.max(
-        0,
-        Math.min(
-          r.width,
-          e.clientX-r.left
-        )
-      ),
-      y:Math.max(
-        0,
-        Math.min(
-          r.height,
-          e.clientY-r.top
-        )
-      )
+      x:Math.max(0,Math.min(rect.width,t.clientX-rect.left)),
+      y:Math.max(0,Math.min(rect.height,t.clientY-rect.top))
     };
   }
 
-
-  /* Apple Pencil / 指：書き始め */
-  function startPointer(e){
-
-    if(
-      e.pointerType!=="pen" &&
-      e.pointerType!=="touch" &&
-      e.pointerType!=="mouse"
-    ){
-      return;
-    }
-
+  /* iPad / Apple PencilはTouch Eventsで処理。座標は書き始め時に固定。 */
+  function startTouch(e){
+    if(!e.touches || e.touches.length===0) return;
     e.preventDefault();
-
-    activePointerId=e.pointerId;
-
-    try{
-      c.setPointerCapture(e.pointerId);
-    }catch(err){}
-
-    const p=getPoint(e);
-
+    rect=c.getBoundingClientRect();
+    const p=pointFromTouch(e.touches[0]);
     drawing=true;
     lastX=p.x;
     lastY=p.y;
-
-    /* 最初のタップも確実に点として反映 */
     ctx.beginPath();
-    ctx.arc(
-      lastX,
-      lastY,
-      2.8,
-      0,
-      Math.PI*2
-    );
+    ctx.arc(lastX,lastY,2.8,0,Math.PI*2);
     ctx.fill();
   }
 
-
-  /* Apple Pencil / 指：移動 */
-  function movePointer(e){
-
-    if(
-      !drawing ||
-      e.pointerId!==activePointerId
-    ){
-      return;
-    }
-
+  function moveTouch(e){
+    if(!drawing || !rect) return;
+    if(!e.touches || e.touches.length===0) return;
     e.preventDefault();
-
-    const p=getPoint(e);
-
-    const dx=p.x-lastX;
-    const dy=p.y-lastY;
-
-    if(
-      Math.abs(dx)<0.05 &&
-      Math.abs(dy)<0.05
-    ){
-      return;
-    }
-
+    const p=pointFromTouch(e.touches[0]);
+    if(p.x===lastX && p.y===lastY) return;
     ctx.beginPath();
     ctx.moveTo(lastX,lastY);
     ctx.lineTo(p.x,p.y);
     ctx.stroke();
-
     lastX=p.x;
     lastY=p.y;
   }
 
-
-  /* Apple Pencil / 指：終了 */
-  function endPointer(e){
-
-    if(
-      activePointerId!==null &&
-      e.pointerId!==activePointerId
-    ){
-      return;
-    }
-
+  function endTouch(e){
     e.preventDefault();
-
     drawing=false;
-
-    try{
-      if(c.hasPointerCapture(e.pointerId)){
-        c.releasePointerCapture(e.pointerId);
-      }
-    }catch(err){}
-
-    activePointerId=null;
+    rect=null;
   }
 
-
-  /*
-    Pointer Eventsを使用
-    → iPad Safari / Apple Pencilで安定して入力
-    → 指でも書ける
-    → 線が途中で切れにくい
-  */
-  c.addEventListener(
-    "pointerdown",
-    startPointer,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "pointermove",
-    movePointer,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "pointerup",
-    endPointer,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "pointercancel",
-    endPointer,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "pointerleave",
-    e => {
-      if(drawing && e.pointerType==="mouse"){
-        endPointer(e);
-      }
-    },
-    {passive:false}
-  );
+  c.addEventListener("touchstart",startTouch,{passive:false});
+  c.addEventListener("touchmove",moveTouch,{passive:false});
+  c.addEventListener("touchend",endTouch,{passive:false});
+  c.addEventListener("touchcancel",endTouch,{passive:false});
 }
 
 
