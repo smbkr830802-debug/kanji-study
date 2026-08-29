@@ -20,10 +20,6 @@ h1{text-align:center;font-size:25px;margin:8px 0 16px}
 .day small{display:block;margin-top:3px}
 .notice{text-align:center;color:#666;padding:10px 0 2px}
 .week{text-align:center;color:#666;font-size:14px;margin-top:4px}
-.weekPicker{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px}
-.weekPicker label{font-size:14px;color:#666}
-.weekPicker select{font-size:16px;padding:7px 12px;border:1px solid #d8d5cf;border-radius:12px;background:#fff;color:#292929}
-
 .kanji{text-align:center;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:118px;line-height:1;margin:8px 0 0}
 .read{text-align:center;font-size:16px;margin:8px 0 2px}
 .example{text-align:center;color:#666;font-size:14px;margin-bottom:10px}
@@ -68,9 +64,11 @@ button:active{transform:scale(.98)}
 </div>
 <div id="notice" class="notice"></div>
 <div id="week" class="week"></div>
-<div class="weekPicker">
+<div style="text-align:center;margin-top:10px">
   <label for="weekSelect">確認する週：</label>
-  <select id="weekSelect"></select>
+  <select id="weekSelect" style="font-size:16px;padding:7px 12px;border:1px solid #d8d5cf;border-radius:10px;background:#fff">
+    ${Array.from({length:40},(_,i)=>`<option value="${i+1}">第${i+1}週</option>`).join("")}
+  </select>
 </div>
 </section>
 <div id="app"></div>
@@ -122,19 +120,14 @@ let weekIndex = weekNo-1;
 /* その週の5文字 */
 function weekItems(){
 
-  const selected =
-    $("weekSelect") ? Number($("weekSelect").value) : weekNo;
-
-  const selectedIndex=Math.max(0,selected-1);
-
-  if(selectedIndex < 40){
+  if(weekIndex < 40){
     return KANJI.slice(
-      selectedIndex*5,
-      selectedIndex*5+5
+      weekIndex*5,
+      weekIndex*5+5
     );
   }
 
-  const base=((selectedIndex-40)*17)%KANJI.length;
+  const base=((weekIndex-40)*17)%KANJI.length;
 
   return [0,1,2,3,4].map(i =>
     KANJI[(base+i*7)%KANJI.length]
@@ -185,35 +178,27 @@ document.querySelectorAll(".day").forEach(button => {
 });
 
 
-/* 週選択 */
-const weekSelect=$("weekSelect");
-
-for(let w=1;w<=40;w++){
-  const option=document.createElement("option");
-  option.value=w;
-  option.textContent=`第${w}週`;
-  weekSelect.appendChild(option);
-}
-
-weekSelect.value=Math.min(40,Math.max(1,weekNo));
-
-function updateWeekLabel(){
-
-  const selected=Number(weekSelect.value);
-
+/* 週表示 */
+function updateWeekDisplay(){
   $("week").textContent =
-    selected<=40
-      ? `第${selected}週：新しい漢字 5字`
-      : `第${selected}週：復習週`;
+    weekNo<=40
+      ? `第${weekNo}週：新しい漢字 5字`
+      : `第${weekNo}週：復習週`;
 }
 
-weekSelect.addEventListener("change",()=>{
-  weekIndex=Number(weekSelect.value)-1;
-  updateWeekLabel();
-  render(todayDay);
+/* 週を選んで確認 */
+$("weekSelect").value = String(Math.min(40,Math.max(1,weekNo)));
+
+$("weekSelect").addEventListener("change",()=>{
+  weekNo = Number($("weekSelect").value);
+  weekIndex = weekNo-1;
+  updateWeekDisplay();
+
+  /* 選んだ週をすぐ確認できるよう、月曜日を表示 */
+  render(1);
 });
 
-updateWeekLabel();
+updateWeekDisplay();
 
 /* 初期表示 */
 render(todayDay);
@@ -287,7 +272,7 @@ function render(d){
 
 function renderStudy(item,d){
 
-  const selectedWeek=Number($("weekSelect").value);\n  const key="done_"+selectedWeek+"_"+d;
+  const key="done_"+weekNo+"_"+d;
 
   const done=load(key,false);
 
@@ -397,19 +382,45 @@ function renderStudy(item,d){
 
 function setupCanvas(c){
 
-  const ctx=c.getContext("2d",{alpha:true});
+  const ctx=c.getContext("2d");
 
   let drawing=false;
   let lastX=0;
   let lastY=0;
-  let rect=null;
+  let activePointerId=null;
+
 
   function resize(){
+
     const r=c.getBoundingClientRect();
-    const dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
-    c.width=Math.max(1,Math.round(r.width*dpr));
-    c.height=Math.max(1,Math.round(r.height*dpr));
-    ctx.setTransform(dpr,0,0,dpr,0,0);
+
+    const dpr=Math.max(
+      1,
+      Math.min(
+        3,
+        window.devicePixelRatio || 1
+      )
+    );
+
+    c.width=Math.max(
+      1,
+      Math.round(r.width*dpr)
+    );
+
+    c.height=Math.max(
+      1,
+      Math.round(r.height*dpr)
+    );
+
+    ctx.setTransform(
+      dpr,
+      0,
+      0,
+      dpr,
+      0,
+      0
+    );
+
     ctx.lineCap="round";
     ctx.lineJoin="round";
     ctx.lineWidth=5;
@@ -417,54 +428,174 @@ function setupCanvas(c){
     ctx.fillStyle="#111";
   }
 
-  resize();
-  window.addEventListener("resize",resize);
 
-  function pointFromTouch(t){
+  resize();
+
+
+  window.addEventListener(
+    "resize",
+    resize
+  );
+
+
+  function getPoint(e){
+
+    const r=c.getBoundingClientRect();
+
     return {
-      x:Math.max(0,Math.min(rect.width,t.clientX-rect.left)),
-      y:Math.max(0,Math.min(rect.height,t.clientY-rect.top))
+      x:Math.max(
+        0,
+        Math.min(
+          r.width,
+          e.clientX-r.left
+        )
+      ),
+      y:Math.max(
+        0,
+        Math.min(
+          r.height,
+          e.clientY-r.top
+        )
+      )
     };
   }
 
-  /* iPad / Apple PencilはTouch Eventsで処理。座標は書き始め時に固定。 */
-  function startTouch(e){
-    if(!e.touches || e.touches.length===0) return;
+
+  /* Apple Pencil / 指：書き始め */
+  function startPointer(e){
+
+    if(
+      e.pointerType!=="pen" &&
+      e.pointerType!=="touch" &&
+      e.pointerType!=="mouse"
+    ){
+      return;
+    }
+
     e.preventDefault();
-    rect=c.getBoundingClientRect();
-    const p=pointFromTouch(e.touches[0]);
+
+    activePointerId=e.pointerId;
+
+    try{
+      c.setPointerCapture(e.pointerId);
+    }catch(err){}
+
+    const p=getPoint(e);
+
     drawing=true;
     lastX=p.x;
     lastY=p.y;
+
+    /* 最初のタップも確実に点として反映 */
     ctx.beginPath();
-    ctx.arc(lastX,lastY,2.8,0,Math.PI*2);
+    ctx.arc(
+      lastX,
+      lastY,
+      2.8,
+      0,
+      Math.PI*2
+    );
     ctx.fill();
   }
 
-  function moveTouch(e){
-    if(!drawing || !rect) return;
-    if(!e.touches || e.touches.length===0) return;
+
+  /* Apple Pencil / 指：移動 */
+  function movePointer(e){
+
+    if(
+      !drawing ||
+      e.pointerId!==activePointerId
+    ){
+      return;
+    }
+
     e.preventDefault();
-    const p=pointFromTouch(e.touches[0]);
-    if(p.x===lastX && p.y===lastY) return;
+
+    const p=getPoint(e);
+
+    const dx=p.x-lastX;
+    const dy=p.y-lastY;
+
+    if(
+      Math.abs(dx)<0.05 &&
+      Math.abs(dy)<0.05
+    ){
+      return;
+    }
+
     ctx.beginPath();
     ctx.moveTo(lastX,lastY);
     ctx.lineTo(p.x,p.y);
     ctx.stroke();
+
     lastX=p.x;
     lastY=p.y;
   }
 
-  function endTouch(e){
+
+  /* Apple Pencil / 指：終了 */
+  function endPointer(e){
+
+    if(
+      activePointerId!==null &&
+      e.pointerId!==activePointerId
+    ){
+      return;
+    }
+
     e.preventDefault();
+
     drawing=false;
-    rect=null;
+
+    try{
+      if(c.hasPointerCapture(e.pointerId)){
+        c.releasePointerCapture(e.pointerId);
+      }
+    }catch(err){}
+
+    activePointerId=null;
   }
 
-  c.addEventListener("touchstart",startTouch,{passive:false});
-  c.addEventListener("touchmove",moveTouch,{passive:false});
-  c.addEventListener("touchend",endTouch,{passive:false});
-  c.addEventListener("touchcancel",endTouch,{passive:false});
+
+  /*
+    Pointer Eventsを使用
+    → iPad Safari / Apple Pencilで安定して入力
+    → 指でも書ける
+    → 線が途中で切れにくい
+  */
+  c.addEventListener(
+    "pointerdown",
+    startPointer,
+    {passive:false}
+  );
+
+  c.addEventListener(
+    "pointermove",
+    movePointer,
+    {passive:false}
+  );
+
+  c.addEventListener(
+    "pointerup",
+    endPointer,
+    {passive:false}
+  );
+
+  c.addEventListener(
+    "pointercancel",
+    endPointer,
+    {passive:false}
+  );
+
+  c.addEventListener(
+    "pointerleave",
+    e => {
+      if(drawing && e.pointerType==="mouse"){
+        endPointer(e);
+      }
+    },
+    {passive:false}
+  );
 }
 
 
@@ -512,7 +643,7 @@ function clearCanvas(c){
 function renderTest(items){
 
   const state=load(
-    "test_"+Number($("weekSelect").value),
+    "test_"+weekNo,
     [false,false,false,false,false]
   );
 
@@ -566,7 +697,7 @@ function renderTest(items){
     button.onclick=()=>{
       const i=Number(button.dataset.done);
       state[i]=!state[i];
-      save("test_"+Number($("weekSelect").value),state);
+      save("test_"+weekNo,state);
       button.textContent=state[i] ? "✓ できた" : "○ できた";
       $("score").textContent=state.filter(Boolean).length+" / 5";
     };
