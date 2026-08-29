@@ -29,7 +29,7 @@ h1{text-align:center;font-size:25px;margin:8px 0 16px}
 .canvasWrap{position:relative;width:100%;aspect-ratio:1.15;background:#fff;border:2px solid #d8d5cf;border-radius:16px;overflow:hidden;touch-action:none}
 .traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:min(42vw,150px);color:#e7e3db;pointer-events:none;user-select:none}
 .strokeNums{position:absolute;inset:0;pointer-events:none;user-select:none;z-index:3}
-.strokeNum{position:absolute;transform:translate(-50%,-50%);font-family:Arial,sans-serif;font-weight:700;font-size:18px;line-height:1;color:#777;background:rgba(255,255,255,.88);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.strokeNum{position:absolute;transform:translate(-50%,-50%);font-family:Arial,sans-serif;font-weight:700;font-size:18px;line-height:1;color:#555;background:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .strokeOrderNote{text-align:center;color:#777;font-size:12px;margin-top:6px}
 
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none;outline:none;cursor:crosshair}
@@ -438,6 +438,9 @@ function renderStudy(item,d){
         });
 
       if(!texts.length){
+        /*
+          StrokeNumbersがない漢字でも、書く練習そのものは継続できる。
+        */
         return;
       }
 
@@ -453,19 +456,46 @@ function renderStudy(item,d){
           node.getAttribute("transform") || "";
 
         /*
-          KanjiVGのStrokeNumbersは通常
-          translate(x y) で位置を指定します。
+          KanjiVGのStrokeNumbersは
+          matrix(a b c d x y) 形式で位置を指定するデータが多い。
+          古い/別形式の translate(x y) も受け付ける。
         */
-        const m=transform.match(
-          /translate\(\s*([-\d.]+)[ ,]\s*([-\d.]+)\s*\)/
+        let x=null;
+        let y=null;
+
+        let m=transform.match(
+          /matrix\(\s*[-\d.eE+]+\s+[-\d.eE+]+\s+[-\d.eE+]+\s+[-\d.eE+]+\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s*\)/
         );
 
-        if(!m){
-          continue;
+        if(m){
+          x=parseFloat(m[1]);
+          y=parseFloat(m[2]);
+        }else{
+          m=transform.match(
+            /translate\(\s*([-\d.eE+]+)[ ,]\s*([-\d.eE+]+)\s*\)/
+          );
+
+          if(m){
+            x=parseFloat(m[1]);
+            y=parseFloat(m[2]);
+          }
         }
 
-        const x=parseFloat(m[1]);
-        const y=parseFloat(m[2]);
+        /*
+          一部のSVGではtransformがなく、x/y属性を使う。
+        */
+        if(
+          (!Number.isFinite(x) || !Number.isFinite(y)) &&
+          node.hasAttribute("x") &&
+          node.hasAttribute("y")
+        ){
+          x=parseFloat(node.getAttribute("x"));
+          y=parseFloat(node.getAttribute("y"));
+        }
+
+        if(!Number.isFinite(x) || !Number.isFinite(y)){
+          continue;
+        }
 
         if(!Number.isFinite(x) || !Number.isFinite(y)){
           continue;
