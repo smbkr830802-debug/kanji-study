@@ -510,13 +510,55 @@ function setupCanvas(c){
   function movePointer(e){
 
     if(
-      !drawing ||
-      e.pointerId!==activePointerId
+      e.pointerType!=="pen" &&
+      e.pointerType!=="touch" &&
+      e.pointerType!=="mouse"
     ){
       return;
     }
 
     e.preventDefault();
+
+    /*
+      iPad Safariでまれに pointerdown を取りこぼす場合の保険。
+      最初の pointermove が届いた時点で描画を開始する。
+      これにより「置いたのに点が出ない→そのまま書けない」を
+      できるだけ防ぐ。
+    */
+    if(!drawing){
+
+      if(e.pointerType!=="pen"){
+        return;
+      }
+
+      activePointerId=e.pointerId;
+
+      try{
+        c.setPointerCapture(e.pointerId);
+      }catch(err){}
+
+      const p=getPoint(e);
+
+      drawing=true;
+      lastX=p.x;
+      lastY=p.y;
+
+      ctx.beginPath();
+      ctx.arc(
+        lastX,
+        lastY,
+        2.8,
+        0,
+        Math.PI*2
+      );
+      ctx.fill();
+
+      return;
+    }
+
+    if(e.pointerId!==activePointerId){
+      return;
+    }
 
     const p=getPoint(e);
 
@@ -578,6 +620,13 @@ function setupCanvas(c){
 
   c.addEventListener(
     "pointermove",
+    movePointer,
+    {passive:false}
+  );
+
+  /* iPadの高頻度ペン入力を補助的に拾う */
+  c.addEventListener(
+    "pointerrawupdate",
     movePointer,
     {passive:false}
   );
