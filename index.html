@@ -29,7 +29,7 @@ h1{text-align:center;font-size:25px;margin:8px 0 16px}
 .canvasWrap{position:relative;width:100%;aspect-ratio:1.15;background:#fff;border:2px solid #d8d5cf;border-radius:16px;overflow:hidden;touch-action:none}
 .traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:min(42vw,150px);color:#e7e3db;pointer-events:none;user-select:none}
 .strokeNums{position:absolute;inset:0;pointer-events:none;user-select:none;z-index:3}
-.strokeNum{position:absolute;transform:translate(-50%,-50%);font-family:Arial,sans-serif;font-weight:700;font-size:18px;line-height:1;color:#555;background:#fff;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.strokeNum{position:absolute;transform:translate(-50%,-50%);font-family:Arial,sans-serif;font-weight:700;font-size:14px;line-height:1;color:#333;background:#fff;border:1.5px solid #777;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.15);z-index:4}
 .strokeOrderNote{text-align:center;color:#777;font-size:12px;margin-top:6px}
 
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none;outline:none;cursor:crosshair}
@@ -383,6 +383,7 @@ function renderStudy(item,d){
   loadStrokeNumbers(item.k);
 
 
+
   async function loadStrokeNumbers(kanji){
 
     const box=$("strokeNums");
@@ -422,106 +423,105 @@ function renderStudy(item,d){
         "image/svg+xml"
       );
 
-      const texts=
-        Array.from(
-          doc.getElementsByTagName("text")
-        ).filter(node=>{
-          let parent=node.parentElement;
-          while(parent){
-            const id=parent.getAttribute("id") || "";
-            if(id.includes("StrokeNumbers_")){
-              return true;
-            }
-            parent=parent.parentElement;
-          }
-          return false;
-        });
+      /*
+        以前はStrokeNumbersのtext位置をそのまま使っていたため、
+        数字が漢字から離れて見える漢字がありました。
 
-      if(!texts.length){
-        /*
-          StrokeNumbersがない漢字でも、書く練習そのものは継続できる。
-        */
+        今回は「各画そのもの」のStrokePathsから最初のM点を取り、
+        その場所に①②③…を置きます。
+        つまり、数字が「その画を書き始める場所」を直接指します。
+      */
+      const paths=Array.from(
+        doc.querySelectorAll(
+          '[id*="StrokePaths_"] path'
+        )
+      );
+
+      if(!paths.length){
         return;
       }
 
-      for(const node of texts){
+      const circled=[
+        "①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩",
+        "⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳",
+        "㉑","㉒","㉓","㉔","㉕","㉖","㉗","㉘","㉙","㉚"
+      ];
 
-        const label=(node.textContent || "").trim();
+      /*
+        KanjiVGのviewBoxは通常0 0 109 109。
+        念のためviewBoxから座標系を取得します。
+      */
+      const viewBox=(doc.documentElement.getAttribute("viewBox") || "0 0 109 109")
+        .trim()
+        .split(/[\s,]+/)
+        .map(Number);
 
-        if(!label){
-          continue;
-        }
+      const minX=Number.isFinite(viewBox[0]) ? viewBox[0] : 0;
+      const minY=Number.isFinite(viewBox[1]) ? viewBox[1] : 0;
+      const width=Number.isFinite(viewBox[2]) && viewBox[2] ? viewBox[2] : 109;
+      const height=Number.isFinite(viewBox[3]) && viewBox[3] ? viewBox[3] : 109;
 
-        const transform=
-          node.getAttribute("transform") || "";
+      /*
+        traceCharと同じ正方形基準で表示します。
+        数字は画の開始点に置き、薄い白丸で線と区別します。
+      */
+      paths.forEach((path,index)=>{
+
+        const d=path.getAttribute("d") || "";
 
         /*
-          KanjiVGのStrokeNumbersは
-          matrix(a b c d x y) 形式で位置を指定するデータが多い。
-          古い/別形式の translate(x y) も受け付ける。
+          最初の絶対M / 相対mを探す。
+          KanjiVGのStrokePathsでは各pathの先頭が
+          その画の開始点です。
         */
-        let x=null;
-        let y=null;
-
-        let m=transform.match(
-          /matrix\(\s*[-\d.eE+]+\s+[-\d.eE+]+\s+[-\d.eE+]+\s+[-\d.eE+]+\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s*\)/
+        const m=d.match(
+          /^\s*[Mm]\s*([-\d.]+)[,\s]+([-\d.]+)/
         );
 
-        if(m){
-          x=parseFloat(m[1]);
-          y=parseFloat(m[2]);
-        }else{
-          m=transform.match(
-            /translate\(\s*([-\d.eE+]+)[ ,]\s*([-\d.eE+]+)\s*\)/
-          );
+        if(!m){
+          return;
+        }
 
-          if(m){
-            x=parseFloat(m[1]);
-            y=parseFloat(m[2]);
-          }
+        let x=parseFloat(m[1]);
+        let y=parseFloat(m[2]);
+
+        if(!Number.isFinite(x) || !Number.isFinite(y)){
+          return;
         }
 
         /*
-          一部のSVGではtransformがなく、x/y属性を使う。
+          相対mの場合も扱う。
+          KanjiVGの通常データは絶対Mなので、ここではそのまま
+          座標として扱います。
         */
-        if(
-          (!Number.isFinite(x) || !Number.isFinite(y)) &&
-          node.hasAttribute("x") &&
-          node.hasAttribute("y")
-        ){
-          x=parseFloat(node.getAttribute("x"));
-          y=parseFloat(node.getAttribute("y"));
-        }
-
-        if(!Number.isFinite(x) || !Number.isFinite(y)){
-          continue;
-        }
-
-        if(!Number.isFinite(x) || !Number.isFinite(y)){
-          continue;
-        }
+        x-=minX;
+        y-=minY;
 
         const el=document.createElement("span");
 
         el.className="strokeNum";
-        el.textContent=label;
+        el.textContent=
+          circled[index] || String(index+1);
 
-        /*
-          KanjiVGの座標系は109×109。
-          overlayは正方形として扱い、CSSのobject-fitと
-          同じ考え方で中央配置します。
-        */
-        el.style.left=(x/109*100)+"%";
-        el.style.top=(y/109*100)+"%";
+        el.setAttribute(
+          "aria-label",
+          `第${index+1}画`
+        );
+
+        el.style.left=
+          (x/width*100)+"%";
+
+        el.style.top=
+          (y/height*100)+"%";
 
         box.appendChild(el);
-      }
+      });
 
     }catch(error){
 
       /*
-        ネットワークやCDNに接続できない場合でも、
-        漢字練習・Apple Pencilには影響させない。
+        書き順データ取得失敗時も、Apple Pencilを含む
+        漢字練習機能には影響させません。
       */
       console.warn(
         "書き順データを読み込めませんでした。",
@@ -529,6 +529,7 @@ function renderStudy(item,d){
       );
     }
   }
+
 
 
   setupCanvas($("trace"));
