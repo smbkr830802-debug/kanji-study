@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#f7f4ee">
 <title>小3 漢字れんしゅう</title>
 <style>
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 html,body{margin:0;min-height:100%;background:#f7f4ee;color:#292929;font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif}
 body{padding-bottom:30px}
 main{max-width:1100px;margin:auto;padding:14px}
@@ -134,13 +134,16 @@ function renderStudy(item,d){
   $("done").onclick=()=>{save(key,true);$("done").textContent="できた！ ✓";};
 }
 
-function setupCanvas(c){
+  function setupCanvas(c){
   const rect=()=>c.getBoundingClientRect();
 
   function resize(){
-    const r=rect(), dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+    const r=rect();
+    const dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+
     c.width=Math.max(1,Math.round(r.width*dpr));
     c.height=Math.max(1,Math.round(r.height*dpr));
+
     const ctx=c.getContext("2d");
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.lineCap="round";
@@ -154,8 +157,8 @@ function setupCanvas(c){
   window.addEventListener("resize",resize);
 
   let drawing=false;
-  let last=null;
   let activePointerId=null;
+  let last=null;
 
   function pos(e){
     const r=rect();
@@ -165,44 +168,78 @@ function setupCanvas(c){
     };
   }
 
-  function start(e){
-    if(activePointerId!==null)return;
-    e.preventDefault();
-    activePointerId=e.pointerId;
-    try{c.setPointerCapture(e.pointerId)}catch(_){}
-    drawing=true;
-    last=pos(e);
-
-    // 最初の1タップでも確実に黒い点を描く
+  function drawPoint(p){
     const ctx=c.getContext("2d");
     ctx.beginPath();
-    ctx.arc(last.x,last.y,3,0,Math.PI*2);
+    ctx.arc(p.x,p.y,3,0,Math.PI*2);
     ctx.fill();
+  }
+
+  function drawLine(a,b){
+    const ctx=c.getContext("2d");
+    ctx.beginPath();
+    ctx.moveTo(a.x,a.y);
+    ctx.lineTo(b.x,b.y);
+    ctx.stroke();
+  }
+
+  function start(e){
+    if(activePointerId!==null)return;
+
+    e.preventDefault();
+
+    activePointerId=e.pointerId;
+    drawing=true;
+
+    try{
+      c.setPointerCapture(e.pointerId);
+    }catch(_){}
+
+    last=pos(e);
+
+    // 書き始めの1点を確実に描く
+    drawPoint(last);
   }
 
   function move(e){
     if(!drawing || e.pointerId!==activePointerId)return;
+
     e.preventDefault();
 
-    const p=pos(e);
-    const dx=p.x-last.x, dy=p.y-last.y;
-    if(Math.abs(dx)+Math.abs(dy)<0.5)return;
+    const events =
+      typeof e.getCoalescedEvents==="function"
+      ? e.getCoalescedEvents()
+      : [e];
 
-    const ctx=c.getContext("2d");
-    // 短い線分を連続して描き、Apple Pencilでも滑らかな線にする
-    ctx.beginPath();
-    ctx.moveTo(last.x,last.y);
-    ctx.lineTo(p.x,p.y);
-    ctx.stroke();
-    last=p;
+    for(const ev of events){
+      const p=pos(ev);
+
+      if(last){
+        const dx=p.x-last.x;
+        const dy=p.y-last.y;
+
+        if(Math.abs(dx)+Math.abs(dy)>=0.2){
+          drawLine(last,p);
+          last=p;
+        }
+      }else{
+        last=p;
+      }
+    }
   }
 
   function end(e){
     if(e.pointerId!==activePointerId)return;
+
     e.preventDefault();
+
     drawing=false;
     last=null;
-    try{c.releasePointerCapture(e.pointerId)}catch(_){}
+
+    try{
+      c.releasePointerCapture(e.pointerId);
+    }catch(_){}
+
     activePointerId=null;
   }
 
@@ -210,11 +247,13 @@ function setupCanvas(c){
   c.addEventListener("pointermove",move,{passive:false});
   c.addEventListener("pointerup",end,{passive:false});
   c.addEventListener("pointercancel",end,{passive:false});
+
   c.addEventListener("lostpointercapture",()=>{
-    drawing=false; last=null; activePointerId=null;
+    drawing=false;
+    last=null;
+    activePointerId=null;
   });
 }
-
 function clearCanvas(c){
   const ctx=c.getContext("2d");
   const r=c.getBoundingClientRect();
