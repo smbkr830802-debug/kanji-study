@@ -388,15 +388,47 @@ function renderStudy(item,d){
    書く部分
 ========================= */
 
-function setupCanvas(c){
+/* =========================================================
+   Apple Pencil drawing
+   - document captureで入力を拾う
+   - pointerdown取りこぼし時は最初のpointermoveで自動開始
+   - pointerrawupdateは使用しない（重複描画を防ぐ）
+   ========================================================= */
+
+const canvasStates = new WeakMap();
+const activePens = new Map();
+let drawingEventsInstalled = false;
+
+function getCanvasPoint(c, e){
+
+  const r=c.getBoundingClientRect();
+
+  return {
+    x:Math.max(
+      0,
+      Math.min(
+        r.width,
+        e.clientX-r.left
+      )
+    ),
+    y:Math.max(
+      0,
+      Math.min(
+        r.height,
+        e.clientY-r.top
+      )
+    )
+  };
+}
+
+
+function prepareCanvas(c){
+
+  if(canvasStates.has(c)){
+    return canvasStates.get(c);
+  }
 
   const ctx=c.getContext("2d");
-
-  let drawing=false;
-  let lastX=0;
-  let lastY=0;
-  let activePointerId=null;
-
 
   function resize(){
 
@@ -436,7 +468,6 @@ function setupCanvas(c){
     ctx.fillStyle="#111";
   }
 
-
   resize();
 
   window.addEventListener(
@@ -444,214 +475,276 @@ function setupCanvas(c){
     resize
   );
 
+  const state={
+    c:c,
+    ctx:ctx,
+    drawing:false,
+    lastX:0,
+    lastY:0,
+    pointerId:null
+  };
 
-  function getPoint(e){
+  canvasStates.set(c,state);
 
-    const r=c.getBoundingClientRect();
+  return state;
+}
 
-    return {
-      x:Math.max(
-        0,
-        Math.min(
-          r.width,
-          e.clientX-r.left
-        )
-      ),
-      y:Math.max(
-        0,
-        Math.min(
-          r.height,
-          e.clientY-r.top
-        )
-      )
-    };
+
+function canvasFromEvent(e){
+
+  let el=e.target;
+
+  if(
+    el &&
+    el.nodeType===1 &&
+    el.tagName==="CANVAS"
+  ){
+    return el;
   }
 
-
-  /* Apple Pencil / 指：書き始め */
-  function startPointer(e){
-
-    if(
-      e.pointerType!=="pen" &&
-      e.pointerType!=="touch" &&
-      e.pointerType!=="mouse"
-    ){
-      return;
-    }
-
-    e.preventDefault();
-
-    activePointerId=e.pointerId;
-
-    try{
-      c.setPointerCapture(e.pointerId);
-    }catch(err){}
-
-    const p=getPoint(e);
-
-    drawing=true;
-    lastX=p.x;
-    lastY=p.y;
-
-    /* 最初のタップも確実に点として反映 */
-    ctx.beginPath();
-    ctx.arc(
-      lastX,
-      lastY,
-      2.8,
-      0,
-      Math.PI*2
+  try{
+    el=document.elementFromPoint(
+      e.clientX,
+      e.clientY
     );
-    ctx.fill();
-  }
-
-
-  /* Apple Pencil / 指：移動 */
-  function movePointer(e){
 
     if(
-      e.pointerType!=="pen" &&
-      e.pointerType!=="touch" &&
-      e.pointerType!=="mouse"
+      el &&
+      el.nodeType===1 &&
+      el.tagName==="CANVAS"
     ){
-      return;
+      return el;
     }
 
-    e.preventDefault();
+    if(
+      el &&
+      el.closest
+    ){
+      const c=el.closest("canvas");
 
-    /*
-      iPad Safariでまれに pointerdown を取りこぼす場合の保険。
-      最初の pointermove が届いた時点で描画を開始する。
-      これにより「置いたのに点が出ない→そのまま書けない」を
-      できるだけ防ぐ。
-    */
-    if(!drawing){
+      if(c){
+        return c;
+      }
+    }
+  }catch(err){}
+
+  return null;
+}
+
+
+function startDrawing(state,e){
+
+  const p=getCanvasPoint(
+    state.c,
+    e
+  );
+
+  state.drawing=true;
+  state.pointerId=e.pointerId;
+  state.lastX=p.x;
+  state.lastY=p.y;
+
+  /*
+    Pencilを置いた瞬間を必ず1点として描画。
+    これが出ないケースでも、次のpointermoveで
+    同じ処理を再度開始できる。
+  */
+  state.ctx.beginPath();
+  state.ctx.arc(
+    p.x,
+    p.y,
+    2.8,
+    0,
+    Math.PI*2
+  );
+  state.ctx.fill();
+
+  activePens.set(
+    e.pointerId,
+    state
+  );
+}
+
+
+function moveDrawing(state,e){
+
+  if(
+    !state.drawing ||
+    state.pointerId!==e.pointerId
+  ){
+    return;
+  }
+
+  const p=getCanvasPoint(
+    state.c,
+    e
+  );
+
+  const dx=p.x-state.lastX;
+  const dy=p.y-state.lastY;
+
+  if(
+    Math.abs(dx)<0.05 &&
+    Math.abs(dy)<0.05
+  ){
+    return;
+  }
+
+  state.ctx.beginPath();
+  state.ctx.moveTo(
+    state.lastX,
+    state.lastY
+  );
+  state.ctx.lineTo(
+    p.x,
+    p.y
+  );
+  state.ctx.stroke();
+
+  state.lastX=p.x;
+  state.lastY=p.y;
+}
+
+
+function finishDrawing(e){
+
+  const state=activePens.get(
+    e.pointerId
+  );
+
+  if(!state){
+    return;
+  }
+
+  state.drawing=false;
+  state.pointerId=null;
+
+  activePens.delete(
+    e.pointerId
+  );
+}
+
+
+function installDrawingEvents(){
+
+  if(drawingEventsInstalled){
+    return;
+  }
+
+  drawingEventsInstalled=true;
+
+
+  /*
+    capture:true にすることで、
+    Canvas自身にイベントが届きにくい場合でも
+    ページ全体でApple Pencil入力を拾う。
+  */
+  document.addEventListener(
+    "pointerdown",
+    e=>{
 
       if(e.pointerType!=="pen"){
         return;
       }
 
-      activePointerId=e.pointerId;
+      const c=canvasFromEvent(e);
 
-      try{
-        c.setPointerCapture(e.pointerId);
-      }catch(err){}
+      if(!c){
+        return;
+      }
 
-      const p=getPoint(e);
+      const state=prepareCanvas(c);
 
-      drawing=true;
-      lastX=p.x;
-      lastY=p.y;
+      e.preventDefault();
 
-      ctx.beginPath();
-      ctx.arc(
-        lastX,
-        lastY,
-        2.8,
-        0,
-        Math.PI*2
+      startDrawing(
+        state,
+        e
       );
-      ctx.fill();
-
-      return;
-    }
-
-    if(e.pointerId!==activePointerId){
-      return;
-    }
-
-    const p=getPoint(e);
-
-    const dx=p.x-lastX;
-    const dy=p.y-lastY;
-
-    if(
-      Math.abs(dx)<0.05 &&
-      Math.abs(dy)<0.05
-    ){
-      return;
-    }
-
-    ctx.beginPath();
-    ctx.moveTo(lastX,lastY);
-    ctx.lineTo(p.x,p.y);
-    ctx.stroke();
-
-    lastX=p.x;
-    lastY=p.y;
-  }
-
-
-  /* Apple Pencil / 指：終了 */
-  function endPointer(e){
-
-    if(
-      activePointerId!==null &&
-      e.pointerId!==activePointerId
-    ){
-      return;
-    }
-
-    e.preventDefault();
-
-    drawing=false;
-
-    try{
-      if(c.hasPointerCapture(e.pointerId)){
-        c.releasePointerCapture(e.pointerId);
-      }
-    }catch(err){}
-
-    activePointerId=null;
-  }
-
-
-  /*
-    Pointer Eventsを使用
-    → iPad Safari / Apple Pencilで安定して入力
-    → 指でも書ける
-    → 線が途中で切れにくい
-  */
-  c.addEventListener(
-    "pointerdown",
-    startPointer,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "pointermove",
-    movePointer,
-    {passive:false}
-  );
-
-  /* iPadの高頻度ペン入力を補助的に拾う */
-  c.addEventListener(
-    "pointerrawupdate",
-    movePointer,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "pointerup",
-    endPointer,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "pointercancel",
-    endPointer,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "pointerleave",
-    e => {
-      if(drawing && e.pointerType==="mouse"){
-        endPointer(e);
-      }
     },
-    {passive:false}
+    {
+      passive:false,
+      capture:true
+    }
   );
+
+
+  document.addEventListener(
+    "pointermove",
+    e=>{
+
+      if(e.pointerType!=="pen"){
+        return;
+      }
+
+      e.preventDefault();
+
+
+      /*
+        pointerdownを取りこぼした場合の救済。
+        activePensに無くても、現在位置がCanvas内なら
+        ここで新規描画を開始する。
+      */
+      let state=activePens.get(
+        e.pointerId
+      );
+
+      if(!state){
+
+        const c=canvasFromEvent(e);
+
+        if(c){
+
+          state=prepareCanvas(c);
+
+          startDrawing(
+            state,
+            e
+          );
+
+          return;
+        }
+
+        return;
+      }
+
+      moveDrawing(
+        state,
+        e
+      );
+    },
+    {
+      passive:false,
+      capture:true
+    }
+  );
+
+
+  document.addEventListener(
+    "pointerup",
+    finishDrawing,
+    {
+      passive:false,
+      capture:true
+    }
+  );
+
+
+  document.addEventListener(
+    "pointercancel",
+    finishDrawing,
+    {
+      passive:false,
+      capture:true
+    }
+  );
+}
+
+
+function setupCanvas(c){
+
+  prepareCanvas(c);
+  installDrawingEvents();
 }
 
 
