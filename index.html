@@ -361,50 +361,34 @@ function renderStudy(item,d){
 
 function setupCanvas(c){
 
-  /*
-    iPad / Apple Pencilでの「書き始めの遅れ」を減らす。
-    毎回 getBoundingClientRect() を呼ばず、Canvasの位置をキャッシュする。
-  */
-  const ctx=c.getContext("2d",{alpha:true,desynchronized:true});
+  const ctx=c.getContext("2d");
 
   let drawing=false;
   let lastX=0;
   let lastY=0;
   let activePointerId=null;
-  let rect={left:0,top:0,width:1,height:1};
+
 
   function resize(){
 
     const r=c.getBoundingClientRect();
 
-    rect={
-      left:r.left,
-      top:r.top,
-      width:r.width,
-      height:r.height
-    };
-
-    /*
-      土曜は5枚のCanvasを同時に表示するため、
-      高DPRを3倍まで使うと描画負荷が上がりやすい。
-      2倍までにして、Apple Pencilの反応を優先する。
-    */
     const dpr=Math.max(
       1,
       Math.min(
-        2,
+        3,
         window.devicePixelRatio || 1
       )
     );
 
     c.width=Math.max(
       1,
-      Math.round(rect.width*dpr)
+      Math.round(r.width*dpr)
     );
 
     c.height=Math.max(
       1,
-      Math.round(rect.height*dpr)
+      Math.round(r.height*dpr)
     );
 
     ctx.setTransform(
@@ -423,29 +407,38 @@ function setupCanvas(c){
     ctx.fillStyle="#111";
   }
 
+
   resize();
 
-  window.addEventListener("resize",resize);
+
+  window.addEventListener(
+    "resize",
+    resize
+  );
+
 
   function getPoint(e){
+
+    const r=c.getBoundingClientRect();
 
     return {
       x:Math.max(
         0,
         Math.min(
-          rect.width,
-          e.clientX-rect.left
+          r.width,
+          e.clientX-r.left
         )
       ),
       y:Math.max(
         0,
         Math.min(
-          rect.height,
-          e.clientY-rect.top
+          r.height,
+          e.clientY-r.top
         )
       )
     };
   }
+
 
   /* Apple Pencil / 指：書き始め */
   function startPointer(e){
@@ -462,10 +455,10 @@ function setupCanvas(c){
 
     activePointerId=e.pointerId;
 
-    /*
-      最初の座標をすぐ取得して描画を開始。
-      setPointerCaptureは描画開始後に行う。
-    */
+    try{
+      c.setPointerCapture(e.pointerId);
+    }catch(err){}
+
     const p=getPoint(e);
 
     drawing=true;
@@ -482,11 +475,8 @@ function setupCanvas(c){
       Math.PI*2
     );
     ctx.fill();
-
-    try{
-      c.setPointerCapture(e.pointerId);
-    }catch(err){}
   }
+
 
   /* Apple Pencil / 指：移動 */
   function movePointer(e){
@@ -521,6 +511,7 @@ function setupCanvas(c){
     lastY=p.y;
   }
 
+
   /* Apple Pencil / 指：終了 */
   function endPointer(e){
 
@@ -544,6 +535,13 @@ function setupCanvas(c){
     activePointerId=null;
   }
 
+
+  /*
+    Pointer Eventsを使用
+    → iPad Safari / Apple Pencilで安定して入力
+    → 指でも書ける
+    → 線が途中で切れにくい
+  */
   c.addEventListener(
     "pointerdown",
     startPointer,
