@@ -27,7 +27,7 @@ h1{text-align:center;font-size:25px;margin:8px 0 16px}
 .panel{border:2px solid #ddd9d2;border-radius:18px;padding:10px}
 .panel h2{font-size:18px;margin:0 0 8px}
 .canvasWrap{position:relative;width:100%;aspect-ratio:1.15;background:#fff;border:2px solid #d8d5cf;border-radius:16px;overflow:hidden;touch-action:none}
-.traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;user-select:none}.traceSvg{width:78%;height:78%;overflow:visible}.traceSvg path{fill:#e7e3db!important;stroke:none!important}.traceSvg .strokeLabel{font-family:Arial,sans-serif;font-size:5px;font-weight:700;fill:#222;stroke:#fff;stroke-width:1.6;paint-order:stroke;dominant-baseline:middle;text-anchor:middle}.traceSvg .strokeCircle{fill:#fff;fill-opacity:.96;stroke:#555;stroke-width:.55}
+.traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;user-select:none}.traceSvg{width:78%;height:78%;overflow:visible}.traceSvg path{fill:#ddd9d1!important;stroke:none!important}.traceSvg .strokeLabel{font-family:Arial,sans-serif;font-size:5.8px;font-weight:700;fill:#fff;dominant-baseline:middle;text-anchor:middle}.traceSvg .strokeCircle{fill:#4f5f55;fill-opacity:1;stroke:#fff;stroke-width:.7}
 .strokeNums{display:none}
 .strokeNum{position:absolute;transform:translate(-50%,-50%);font-family:Arial,sans-serif;font-weight:700;font-size:14px;line-height:1;color:#333;background:#fff;border:1.5px solid #777;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.15);z-index:4}
 .strokeOrderNote{text-align:center;color:#777;font-size:12px;margin-top:6px}
@@ -321,7 +321,7 @@ function renderStudy(item,d){
           </div>
 
           <div class="strokeOrderNote">
-            ①②③…は書き順です
+            数字は各画の書き始めです。①→②→③…の順に書きます
           </div>
 
           <div class="actions">
@@ -427,10 +427,18 @@ function renderStudy(item,d){
       const vbW=Number.isFinite(vbParts[2])?vbParts[2]:109;
       const vbH=Number.isFinite(vbParts[3])?vbParts[3]:109;
 
-      // SVGの実際の画の開始点を取得し、同じ座標系に番号を描く。
+      // 各画の「書き始め」に番号を置く。
+      // 番号同士が重なる場合だけ、近くの空いている位置へ最小限移動する。
       const layer=document.createElementNS("http://www.w3.org/2000/svg","g");
       layer.setAttribute("class","strokeLabels");
       layer.setAttribute("pointer-events","none");
+
+      const placed=[];
+      const radius=3.35;
+      const candidates=[
+        [0,-5],[0,5],[-5,0],[5,0],[-4,-4],[4,-4],[-4,4],[4,4],
+        [0,-7],[0,7],[-7,0],[7,0],[-6,-5],[6,-5],[-6,5],[6,5]
+      ];
 
       paths.forEach((path,index)=>{
         const d=path.getAttribute("d")||"";
@@ -442,25 +450,29 @@ function renderStudy(item,d){
         if(!Number.isFinite(x)||!Number.isFinite(y)) return;
         x-=minX; y-=minY;
 
-        // 近接する開始点が重なる場合にだけ、番号を少しずらして読みやすくする。
-        const offsets=[
-          [-3,-3],[3,-3],[-3,3],[3,3],[-3,-4],[3,-4],[-4,3],[4,3],
-          [-3,-5],[3,-5],[-4,-4],[4,-4],[-4,4],[4,4],[-4,-5],[4,-5]
-        ];
-        const off=offsets[index%offsets.length];
-        const ox=off[0], oy=off[1];
+        let best={x,y,score:Infinity};
+        for(const [dx,dy] of candidates){
+          const cx=x+dx, cy=y+dy;
+          let score=Math.hypot(dx,dy);
+          for(const q of placed){
+            const dist=Math.hypot(cx-q.x,cy-q.y);
+            if(dist<7) score += (7-dist)*25;
+          }
+          if(score<best.score) best={x:cx,y:cy,score};
+        }
+        placed.push({x:best.x,y:best.y});
 
         const g=document.createElementNS("http://www.w3.org/2000/svg","g");
         const circle=document.createElementNS("http://www.w3.org/2000/svg","circle");
         circle.setAttribute("class","strokeCircle");
-        circle.setAttribute("cx",x+ox);
-        circle.setAttribute("cy",y+oy);
-        circle.setAttribute("r","3.6");
+        circle.setAttribute("cx",best.x);
+        circle.setAttribute("cy",best.y);
+        circle.setAttribute("r",String(radius));
 
         const label=document.createElementNS("http://www.w3.org/2000/svg","text");
         label.setAttribute("class","strokeLabel");
-        label.setAttribute("x",x+ox);
-        label.setAttribute("y",y+oy+0.15);
+        label.setAttribute("x",best.x);
+        label.setAttribute("y",best.y+0.15);
         label.textContent=labels[index]||String(index+1);
 
         g.appendChild(circle);
