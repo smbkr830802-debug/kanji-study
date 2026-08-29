@@ -390,29 +390,44 @@ function renderStudy(item,d){
 
 function setupCanvas(c){
 
-  const ctx=c.getContext("2d", {alpha:true});
+  const ctx=c.getContext("2d");
 
   let drawing=false;
-  let activePointerId=null;
-  let activeTouchId=null;
   let lastX=0;
   let lastY=0;
-  let hasPoint=false;
-
-  // Apple Pencil / Safariでpointerdownが取りこぼされる場合に備え、
-  // Touch Eventsもフォールバックとして併用する。
-  let pointerStartedRecently=false;
+  let activePointerId=null;
 
 
   function resize(){
 
     const r=c.getBoundingClientRect();
-    const dpr=Math.max(1,Math.min(3,window.devicePixelRatio || 1));
 
-    c.width=Math.max(1,Math.round(r.width*dpr));
-    c.height=Math.max(1,Math.round(r.height*dpr));
+    const dpr=Math.max(
+      1,
+      Math.min(
+        3,
+        window.devicePixelRatio || 1
+      )
+    );
 
-    ctx.setTransform(dpr,0,0,dpr,0,0);
+    c.width=Math.max(
+      1,
+      Math.round(r.width*dpr)
+    );
+
+    c.height=Math.max(
+      1,
+      Math.round(r.height*dpr)
+    );
+
+    ctx.setTransform(
+      dpr,
+      0,
+      0,
+      dpr,
+      0,
+      0
+    );
 
     ctx.lineCap="round";
     ctx.lineJoin="round";
@@ -421,105 +436,40 @@ function setupCanvas(c){
     ctx.fillStyle="#111";
   }
 
+
   resize();
-  window.addEventListener("resize",resize);
+
+  window.addEventListener(
+    "resize",
+    resize
+  );
 
 
-  function pointFromClient(x,y){
+  function getPoint(e){
 
     const r=c.getBoundingClientRect();
 
     return {
-      x:x-r.left,
-      y:y-r.top
+      x:Math.max(
+        0,
+        Math.min(
+          r.width,
+          e.clientX-r.left
+        )
+      ),
+      y:Math.max(
+        0,
+        Math.min(
+          r.height,
+          e.clientY-r.top
+        )
+      )
     };
   }
 
 
-  function pointFromPointer(e){
-    return pointFromClient(e.clientX,e.clientY);
-  }
-
-
-  function pointFromTouch(t){
-    return pointFromClient(t.clientX,t.clientY);
-  }
-
-
-  function drawTo(p){
-
-    if(!hasPoint){
-
-      lastX=p.x;
-      lastY=p.y;
-      hasPoint=true;
-
-      // 書き始めを即座に見えるようにする
-      ctx.beginPath();
-      ctx.arc(lastX,lastY,3,0,Math.PI*2);
-      ctx.fill();
-
-      return;
-    }
-
-    const midX=(lastX+p.x)/2;
-    const midY=(lastY+p.y)/2;
-
-    ctx.beginPath();
-    ctx.moveTo(lastX,lastY);
-    ctx.quadraticCurveTo(
-      lastX,
-      lastY,
-      midX,
-      midY
-    );
-    ctx.stroke();
-
-    lastX=p.x;
-    lastY=p.y;
-  }
-
-
-  function drawPointerEvents(e){
-
-    const events =
-      typeof e.getCoalescedEvents==="function"
-        ? e.getCoalescedEvents()
-        : [e];
-
-    for(const ev of events){
-      drawTo(pointFromPointer(ev));
-    }
-  }
-
-
-  function begin(p){
-
-    if(drawing) return;
-
-    drawing=true;
-    activePointerId=null;
-    activeTouchId=null;
-    hasPoint=false;
-
-    drawTo(p);
-  }
-
-
-  function finish(){
-
-    drawing=false;
-    activePointerId=null;
-    activeTouchId=null;
-    hasPoint=false;
-  }
-
-
-  // =========================
-  // Pointer Events
-  // =========================
-
-  function pointerDown(e){
+  /* Apple Pencil / 指：書き始め */
+  function startPointer(e){
 
     if(
       e.pointerType!=="pen" &&
@@ -531,31 +481,67 @@ function setupCanvas(c){
 
     e.preventDefault();
 
-    pointerStartedRecently=true;
-
-    // touchstart側が先に来た場合でも二重描画しない
-    if(drawing) return;
-
     activePointerId=e.pointerId;
-    begin(pointFromPointer(e));
+
+    try{
+      c.setPointerCapture(e.pointerId);
+    }catch(err){}
+
+    const p=getPoint(e);
+
+    drawing=true;
+    lastX=p.x;
+    lastY=p.y;
+
+    /* 最初のタップも確実に点として反映 */
+    ctx.beginPath();
+    ctx.arc(
+      lastX,
+      lastY,
+      2.8,
+      0,
+      Math.PI*2
+    );
+    ctx.fill();
   }
 
 
-  function pointerMove(e){
+  /* Apple Pencil / 指：移動 */
+  function movePointer(e){
 
     if(
       !drawing ||
-      activePointerId!==e.pointerId
+      e.pointerId!==activePointerId
     ){
       return;
     }
 
     e.preventDefault();
-    drawPointerEvents(e);
+
+    const p=getPoint(e);
+
+    const dx=p.x-lastX;
+    const dy=p.y-lastY;
+
+    if(
+      Math.abs(dx)<0.05 &&
+      Math.abs(dy)<0.05
+    ){
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(lastX,lastY);
+    ctx.lineTo(p.x,p.y);
+    ctx.stroke();
+
+    lastX=p.x;
+    lastY=p.y;
   }
 
 
-  function pointerUp(e){
+  /* Apple Pencil / 指：終了 */
+  function endPointer(e){
 
     if(
       activePointerId!==null &&
@@ -565,131 +551,60 @@ function setupCanvas(c){
     }
 
     e.preventDefault();
-    finish();
-  }
 
+    drawing=false;
 
-  // =========================
-  // Touch Events
-  // Apple Pencilでpointerdownが
-  // 取りこぼされた場合の保険
-  // =========================
-
-  function touchStart(e){
-
-    if(drawing) return;
-
-    // pointerdownが直前に届いている場合は何もしない
-    if(pointerStartedRecently){
-      pointerStartedRecently=false;
-      return;
-    }
-
-    if(!e.touches || !e.touches.length) return;
-
-    e.preventDefault();
-
-    const t=e.touches[0];
-
-    activeTouchId=t.identifier;
-    begin(pointFromTouch(t));
-  }
-
-
-  function touchMove(e){
-
-    if(
-      !drawing ||
-      activeTouchId===null
-    ){
-      return;
-    }
-
-    let target=null;
-
-    for(const t of e.touches){
-      if(t.identifier===activeTouchId){
-        target=t;
-        break;
+    try{
+      if(c.hasPointerCapture(e.pointerId)){
+        c.releasePointerCapture(e.pointerId);
       }
-    }
+    }catch(err){}
 
-    if(!target) return;
-
-    e.preventDefault();
-    drawTo(pointFromTouch(target));
+    activePointerId=null;
   }
 
 
-  function touchEnd(e){
-
-    if(activeTouchId===null) return;
-
-    let ended=false;
-
-    for(const t of e.changedTouches){
-      if(t.identifier===activeTouchId){
-        ended=true;
-        break;
-      }
-    }
-
-    if(!ended) return;
-
-    e.preventDefault();
-    finish();
-  }
-
-
+  /*
+    Pointer Eventsを使用
+    → iPad Safari / Apple Pencilで安定して入力
+    → 指でも書ける
+    → 線が途中で切れにくい
+  */
   c.addEventListener(
     "pointerdown",
-    pointerDown,
+    startPointer,
     {passive:false}
   );
 
   c.addEventListener(
     "pointermove",
-    pointerMove,
+    movePointer,
     {passive:false}
   );
 
   c.addEventListener(
     "pointerup",
-    pointerUp,
+    endPointer,
     {passive:false}
   );
 
   c.addEventListener(
     "pointercancel",
-    pointerUp,
-    {passive:false}
-  );
-
-
-  c.addEventListener(
-    "touchstart",
-    touchStart,
+    endPointer,
     {passive:false}
   );
 
   c.addEventListener(
-    "touchmove",
-    touchMove,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "touchend",
-    touchEnd,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "touchcancel",
-    touchEnd,
+    "pointerleave",
+    e => {
+      if(drawing && e.pointerType==="mouse"){
+        endPointer(e);
+      }
+    },
     {passive:false}
   );
 }
+
 
 /* =========================
    消す
