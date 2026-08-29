@@ -38,6 +38,11 @@ button:active{transform:scale(.98)}
 .testItem{border:2px solid #ddd9d2;border-radius:15px;padding:10px 5px;text-align:center;min-height:145px;display:flex;flex-direction:column;justify-content:space-between}
 .q{font-size:15px}
 .answer{font-size:42px;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;min-height:52px}
+.testReading{font-size:18px;font-weight:600;margin:4px 0 6px}
+.testCanvasWrap{position:relative;width:100%;height:150px;background:#fff;border:2px solid #d8d5cf;border-radius:12px;overflow:hidden;touch-action:none}
+.testCanvasWrap canvas{position:absolute;inset:0}
+.testMyAnswer{font-size:13px;color:#777;margin:4px 0}
+
 .score{text-align:center;font-size:28px;font-weight:700;margin:10px}
 .rest{text-align:center;padding:35px 10px;font-size:18px;color:#666}
 .small{font-size:13px;color:#777;text-align:center}
@@ -621,144 +626,70 @@ function renderTest(items){
     [false,false,false,false,false]
   );
 
-
   $("app").innerHTML=`
-
     <section class="card">
-
-      <div class="testTitle">
-        ⭐ 土曜日の5文字テスト
-      </div>
-
+      <div class="testTitle">⭐ 土曜日の5文字テスト</div>
       <div class="small">
-        漢字を見ないで書いてから、
-        「答え」で答え合わせをしよう。
+        ふりがなを見て、空らんに漢字を書こう。<br>
+        書き終わったら「答え」で答え合わせをしよう。
       </div>
 
       <div class="testGrid">
-
         ${items.map((it,i)=>`
-
           <div class="testItem">
-
-            <div class="q">
-              第${i+1}問
+            <div class="q">第${i+1}問</div>
+            <div class="testReading">${esc(it.r.split("・")[0])}</div>
+            <div class="testCanvasWrap">
+              <canvas id="testCanvas${i}"></canvas>
             </div>
-
-            <div
-              class="answer"
-              id="ans${i}">
-              ？
-            </div>
-
-            <button
-              data-answer="${i}">
-              答え
-            </button>
-
-            <button
-              class="secondary"
-              data-done="${i}">
+            <div class="testMyAnswer">自分で書いた答え</div>
+            <div class="answer" id="ans${i}">？</div>
+            <button data-answer="${i}">答え</button>
+            <button class="secondary" data-done="${i}">
               ${state[i] ? "✓ できた" : "○ できた"}
             </button>
-
           </div>
-
         `).join("")}
-
       </div>
 
-
-      <div class="score" id="score">
-        ${state.filter(Boolean).length} / 5
-      </div>
-
+      <div class="score" id="score">${state.filter(Boolean).length} / 5</div>
 
       <div class="actions">
-
-        <button id="showAll">
-          答えを見る
-        </button>
-
-        <button
-          class="secondary"
-          id="resetTest">
-          テストをやり直す
-        </button>
-
+        <button id="showAll">答えを見る</button>
+        <button class="secondary" id="resetTest">テストをやり直す</button>
       </div>
-
     </section>
   `;
 
+  items.forEach((it,i)=>{
+    setupCanvas($("testCanvas"+i));
+  });
 
-  document
-    .querySelectorAll("[data-answer]")
-    .forEach(button=>{
+  document.querySelectorAll("[data-answer]").forEach(button=>{
+    button.onclick=()=>{
+      const i=Number(button.dataset.answer);
+      $("ans"+i).textContent=items[i].k;
+    };
+  });
 
-      button.onclick=()=>{
-
-        const i=Number(
-          button.dataset.answer
-        );
-
-        $("ans"+i).textContent=
-          items[i].k;
-      };
-
-    });
-
-
-  document
-    .querySelectorAll("[data-done]")
-    .forEach(button=>{
-
-      button.onclick=()=>{
-
-        const i=Number(
-          button.dataset.done
-        );
-
-        state[i]=!state[i];
-
-        save(
-          "test_"+weekNo,
-          state
-        );
-
-
-        button.textContent=
-          state[i]
-            ? "✓ できた"
-            : "○ できた";
-
-
-        $("score").textContent=
-          state.filter(Boolean).length+" / 5";
-      };
-
-    });
-
+  document.querySelectorAll("[data-done]").forEach(button=>{
+    button.onclick=()=>{
+      const i=Number(button.dataset.done);
+      state[i]=!state[i];
+      save("test_"+weekNo,state);
+      button.textContent=state[i] ? "✓ できた" : "○ できた";
+      $("score").textContent=state.filter(Boolean).length+" / 5";
+    };
+  });
 
   $("showAll").onclick=()=>{
-
     items.forEach((it,i)=>{
-
-      $("ans"+i).textContent=
-        it.k;
-
+      $("ans"+i).textContent=it.k;
     });
-
   };
 
-
   $("resetTest").onclick=()=>{
-
-    save(
-      "test_"+weekNo,
-      [false,false,false,false,false]
-    );
-
+    save("test_"+weekNo,[false,false,false,false,false]);
     renderTest(items);
   };
 }
