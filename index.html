@@ -237,12 +237,7 @@ function renderStudy(item,d){
     last=null;
   }
 
-  // Apple Pencil / iPad用
-  c.addEventListener("touchstart",startTouch,{passive:false});
-  c.addEventListener("touchmove",moveTouch,{passive:false});
-  c.addEventListener("touchend",endTouch,{passive:false});
-  c.addEventListener("touchcancel",endTouch,{passive:false});
-}
+  
 function clearCanvas(c){
   const ctx=c.getContext("2d");
   const r=c.getBoundingClientRect();
