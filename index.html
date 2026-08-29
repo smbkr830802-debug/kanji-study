@@ -27,10 +27,7 @@ h1{text-align:center;font-size:25px;margin:8px 0 16px}
 .panel{border:2px solid #ddd9d2;border-radius:18px;padding:10px}
 .panel h2{font-size:18px;margin:0 0 8px}
 .canvasWrap{position:relative;width:100%;aspect-ratio:1.15;background:#fff;border:2px solid #d8d5cf;border-radius:16px;overflow:hidden;touch-action:none}
-.traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;user-select:none}.traceSvg{width:78%;height:78%;overflow:visible}.traceSvg path{fill:#ddd9d1!important;stroke:none!important}.traceSvg .strokeLabel{font-family:Arial,sans-serif;font-size:5.8px;font-weight:700;fill:#fff;dominant-baseline:middle;text-anchor:middle}.traceSvg .strokeCircle{fill:#4f5f55;fill-opacity:1;stroke:#fff;stroke-width:.7}
-.strokeNums{display:none}
-.strokeNum{position:absolute;transform:translate(-50%,-50%);font-family:Arial,sans-serif;font-weight:700;font-size:14px;line-height:1;color:#333;background:#fff;border:1.5px solid #777;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.15);z-index:4}
-.strokeOrderNote{text-align:center;color:#777;font-size:12px;margin-top:6px}
+.traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;user-select:none}.traceSvg{width:78%;height:78%;overflow:visible}.traceSvg path{fill:#ddd9d1!important;stroke:none!important}.strokeLabels,.strokeNums{display:none}.strokeOrderNote{text-align:center;color:#777;font-size:12px;margin-top:6px}.strokeAnimation{display:flex;justify-content:center;margin-top:8px}.strokeAnimation button{min-width:150px}.strokeStep{fill:#4f5f55!important}.strokeCurrent{fill:#292929!important}
 
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none;outline:none;cursor:crosshair}
 .actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px}
@@ -315,13 +312,15 @@ function renderStudy(item,d){
               <svg id="traceSvg" class="traceSvg" viewBox="0 0 109 109" aria-hidden="true"></svg>
             </div>
 
-            <div id="strokeNums" class="strokeNums"></div>
-
             <canvas id="trace"></canvas>
           </div>
 
           <div class="strokeOrderNote">
-            数字は各画の書き始めです。①→②→③…の順に書きます
+            「書き順を見る」を押すと、①→②→③…の順に表示します。
+          </div>
+
+          <div class="strokeAnimation">
+            <button id="showStrokeOrder" type="button">▶ 書き順を見る</button>
           </div>
 
           <div class="actions">
@@ -387,7 +386,8 @@ function renderStudy(item,d){
   async function loadStrokeNumbers(kanji){
 
     const svg=$("traceSvg");
-    if(!svg) return;
+    const orderButton=$("showStrokeOrder");
+    if(!svg || !orderButton) return;
 
     svg.innerHTML="";
 
@@ -406,88 +406,83 @@ function renderStudy(item,d){
       svg.setAttribute("viewBox",vb);
       svg.innerHTML=sourceSvg.innerHTML;
 
-      // 文字の薄い下書きだけを残し、書き順番号を同じSVG座標系に置く。
-      svg.querySelectorAll("path").forEach(p=>{
-        p.setAttribute("fill","#e7e3db");
-        p.setAttribute("stroke","none");
-      });
-
       const paths=Array.from(svg.querySelectorAll('[id*="StrokePaths_"] path'));
-      if(!paths.length) return;
+      if(!paths.length) throw new Error("stroke paths unavailable");
 
-      const labels=[
-        "①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩",
-        "⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳",
-        "㉑","㉒","㉓","㉔","㉕","㉖","㉗","㉘","㉙","㉚"
-      ];
-
-      const vbParts=vb.trim().split(/[\s,]+/).map(Number);
-      const minX=Number.isFinite(vbParts[0])?vbParts[0]:0;
-      const minY=Number.isFinite(vbParts[1])?vbParts[1]:0;
-      const vbW=Number.isFinite(vbParts[2])?vbParts[2]:109;
-      const vbH=Number.isFinite(vbParts[3])?vbParts[3]:109;
-
-      // 各画の「書き始め」に番号を置く。
-      // 番号同士が重なる場合だけ、近くの空いている位置へ最小限移動する。
-      const layer=document.createElementNS("http://www.w3.org/2000/svg","g");
-      layer.setAttribute("class","strokeLabels");
-      layer.setAttribute("pointer-events","none");
-
-      const placed=[];
-      const radius=3.35;
-      const candidates=[
-        [0,-5],[0,5],[-5,0],[5,0],[-4,-4],[4,-4],[-4,4],[4,4],
-        [0,-7],[0,7],[-7,0],[7,0],[-6,-5],[6,-5],[-6,5],[6,5]
-      ];
-
-      paths.forEach((path,index)=>{
-        const d=path.getAttribute("d")||"";
-        const m=d.match(/^\s*[Mm]\s*([-+]?\d*\.?\d+)[,\s]+([-+]?\d*\.?\d+)/);
-        if(!m) return;
-
-        let x=parseFloat(m[1]);
-        let y=parseFloat(m[2]);
-        if(!Number.isFinite(x)||!Number.isFinite(y)) return;
-        x-=minX; y-=minY;
-
-        let best={x,y,score:Infinity};
-        for(const [dx,dy] of candidates){
-          const cx=x+dx, cy=y+dy;
-          let score=Math.hypot(dx,dy);
-          for(const q of placed){
-            const dist=Math.hypot(cx-q.x,cy-q.y);
-            if(dist<7) score += (7-dist)*25;
-          }
-          if(score<best.score) best={x:cx,y:cy,score};
-        }
-        placed.push({x:best.x,y:best.y});
-
-        const g=document.createElementNS("http://www.w3.org/2000/svg","g");
-        const circle=document.createElementNS("http://www.w3.org/2000/svg","circle");
-        circle.setAttribute("class","strokeCircle");
-        circle.setAttribute("cx",best.x);
-        circle.setAttribute("cy",best.y);
-        circle.setAttribute("r",String(radius));
-
-        const label=document.createElementNS("http://www.w3.org/2000/svg","text");
-        label.setAttribute("class","strokeLabel");
-        label.setAttribute("x",best.x);
-        label.setAttribute("y",best.y+0.15);
-        label.textContent=labels[index]||String(index+1);
-
-        g.appendChild(circle);
-        g.appendChild(label);
-        layer.appendChild(g);
+      // 最初は全画を薄く表示。
+      paths.forEach(p=>{
+        p.classList.remove("strokeStep","strokeCurrent");
+        p.setAttribute("fill","#ddd9d1");
+        p.setAttribute("stroke","none");
+        p.style.opacity="1";
       });
 
-      svg.appendChild(layer);
+      let timer=null;
+      let runId=0;
+
+      function resetOrder(){
+        runId++;
+        if(timer){
+          clearInterval(timer);
+          timer=null;
+        }
+        paths.forEach(p=>{
+          p.classList.remove("strokeStep","strokeCurrent");
+          p.setAttribute("fill","#ddd9d1");
+          p.style.opacity="1";
+        });
+        orderButton.textContent="▶ 書き順を見る";
+      }
+
+      orderButton.onclick=()=>{
+        runId++;
+        const thisRun=runId;
+        if(timer) clearInterval(timer);
+        timer=null;
+
+        // いったん全て薄く戻してからスタート。
+        paths.forEach(p=>{
+          p.classList.remove("strokeStep","strokeCurrent");
+          p.setAttribute("fill","#ddd9d1");
+          p.style.opacity="1";
+        });
+
+        let i=0;
+        orderButton.disabled=true;
+        orderButton.textContent="書き順を表示中…";
+
+        function showNext(){
+          if(thisRun!==runId) return;
+
+          paths.forEach((p,n)=>{
+            p.classList.remove("strokeCurrent");
+            if(n<i) p.classList.add("strokeStep");
+          });
+
+          if(i < paths.length){
+            paths[i].classList.add("strokeCurrent");
+            i++;
+            timer=setTimeout(showNext,850);
+          }else{
+            paths.forEach(p=>{
+              p.classList.remove("strokeCurrent");
+              p.classList.add("strokeStep");
+            });
+            orderButton.disabled=false;
+            orderButton.textContent="↻ もう一度見る";
+            timer=null;
+          }
+        }
+
+        showNext();
+      };
 
     }catch(error){
       console.warn("書き順データを読み込めませんでした。",error);
-      // 外部データ取得失敗時は、練習キャンバス自体には影響させない。
+      orderButton.disabled=true;
+      orderButton.textContent="書き順データを読み込めません";
     }
   }
-
 
   setupCanvas($("trace"));
   setupCanvas($("write"));
