@@ -27,8 +27,8 @@ h1{text-align:center;font-size:25px;margin:8px 0 16px}
 .panel{border:2px solid #ddd9d2;border-radius:18px;padding:10px}
 .panel h2{font-size:18px;margin:0 0 8px}
 .canvasWrap{position:relative;width:100%;aspect-ratio:1.15;background:#fff;border:2px solid #d8d5cf;border-radius:16px;overflow:hidden;touch-action:none}
-.traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:min(42vw,150px);color:#e7e3db;pointer-events:none;user-select:none}
-.strokeNums{position:absolute;inset:0;pointer-events:none;user-select:none;z-index:3}
+.traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;user-select:none}.traceSvg{width:78%;height:78%;overflow:visible}.traceSvg path{fill:#e7e3db!important;stroke:none!important}.traceSvg .strokeLabel{font-family:Arial,sans-serif;font-size:5px;font-weight:700;fill:#222;stroke:#fff;stroke-width:1.6;paint-order:stroke;dominant-baseline:middle;text-anchor:middle}.traceSvg .strokeCircle{fill:#fff;fill-opacity:.96;stroke:#555;stroke-width:.55}
+.strokeNums{display:none}
 .strokeNum{position:absolute;transform:translate(-50%,-50%);font-family:Arial,sans-serif;font-weight:700;font-size:14px;line-height:1;color:#333;background:#fff;border:1.5px solid #777;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.15);z-index:4}
 .strokeOrderNote{text-align:center;color:#777;font-size:12px;margin-top:6px}
 
@@ -312,7 +312,7 @@ function renderStudy(item,d){
 
           <div class="canvasWrap">
             <div class="traceChar">
-              ${esc(item.k)}
+              <svg id="traceSvg" class="traceSvg" viewBox="0 0 109 109" aria-hidden="true"></svg>
             </div>
 
             <div id="strokeNums" class="strokeNums"></div>
@@ -386,150 +386,95 @@ function renderStudy(item,d){
 
   async function loadStrokeNumbers(kanji){
 
-    const box=$("strokeNums");
+    const svg=$("traceSvg");
+    if(!svg) return;
 
-    if(!box){
-      return;
-    }
+    svg.innerHTML="";
 
-    box.innerHTML="";
-
-    const hex=kanji
-      .codePointAt(0)
-      .toString(16)
-      .toLowerCase()
-      .padStart(5,"0");
-
-    const url=
-      `https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@master/kanji/${hex}.svg`;
+    const hex=kanji.codePointAt(0).toString(16).toLowerCase().padStart(5,"0");
+    const url=`https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@master/kanji/${hex}.svg`;
 
     try{
-
-      const response=await fetch(
-        url,
-        {
-          cache:"force-cache"
-        }
-      );
-
-      if(!response.ok){
-        throw new Error("stroke data unavailable");
-      }
+      const response=await fetch(url,{cache:"force-cache"});
+      if(!response.ok) throw new Error("stroke data unavailable");
 
       const svgText=await response.text();
+      const doc=new DOMParser().parseFromString(svgText,"image/svg+xml");
+      const sourceSvg=doc.documentElement;
 
-      const doc=new DOMParser().parseFromString(
-        svgText,
-        "image/svg+xml"
-      );
+      const vb=sourceSvg.getAttribute("viewBox") || "0 0 109 109";
+      svg.setAttribute("viewBox",vb);
+      svg.innerHTML=sourceSvg.innerHTML;
 
-      /*
-        以前はStrokeNumbersのtext位置をそのまま使っていたため、
-        数字が漢字から離れて見える漢字がありました。
+      // 文字の薄い下書きだけを残し、書き順番号を同じSVG座標系に置く。
+      svg.querySelectorAll("path").forEach(p=>{
+        p.setAttribute("fill","#e7e3db");
+        p.setAttribute("stroke","none");
+      });
 
-        今回は「各画そのもの」のStrokePathsから最初のM点を取り、
-        その場所に①②③…を置きます。
-        つまり、数字が「その画を書き始める場所」を直接指します。
-      */
-      const paths=Array.from(
-        doc.querySelectorAll(
-          '[id*="StrokePaths_"] path'
-        )
-      );
+      const paths=Array.from(svg.querySelectorAll('[id*="StrokePaths_"] path'));
+      if(!paths.length) return;
 
-      if(!paths.length){
-        return;
-      }
-
-      const circled=[
+      const labels=[
         "①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩",
         "⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳",
         "㉑","㉒","㉓","㉔","㉕","㉖","㉗","㉘","㉙","㉚"
       ];
 
-      /*
-        KanjiVGのviewBoxは通常0 0 109 109。
-        念のためviewBoxから座標系を取得します。
-      */
-      const viewBox=(doc.documentElement.getAttribute("viewBox") || "0 0 109 109")
-        .trim()
-        .split(/[\s,]+/)
-        .map(Number);
+      const vbParts=vb.trim().split(/[\s,]+/).map(Number);
+      const minX=Number.isFinite(vbParts[0])?vbParts[0]:0;
+      const minY=Number.isFinite(vbParts[1])?vbParts[1]:0;
+      const vbW=Number.isFinite(vbParts[2])?vbParts[2]:109;
+      const vbH=Number.isFinite(vbParts[3])?vbParts[3]:109;
 
-      const minX=Number.isFinite(viewBox[0]) ? viewBox[0] : 0;
-      const minY=Number.isFinite(viewBox[1]) ? viewBox[1] : 0;
-      const width=Number.isFinite(viewBox[2]) && viewBox[2] ? viewBox[2] : 109;
-      const height=Number.isFinite(viewBox[3]) && viewBox[3] ? viewBox[3] : 109;
+      // SVGの実際の画の開始点を取得し、同じ座標系に番号を描く。
+      const layer=document.createElementNS("http://www.w3.org/2000/svg","g");
+      layer.setAttribute("class","strokeLabels");
+      layer.setAttribute("pointer-events","none");
 
-      /*
-        traceCharと同じ正方形基準で表示します。
-        数字は画の開始点に置き、薄い白丸で線と区別します。
-      */
       paths.forEach((path,index)=>{
-
-        const d=path.getAttribute("d") || "";
-
-        /*
-          最初の絶対M / 相対mを探す。
-          KanjiVGのStrokePathsでは各pathの先頭が
-          その画の開始点です。
-        */
-        const m=d.match(
-          /^\s*[Mm]\s*([-\d.]+)[,\s]+([-\d.]+)/
-        );
-
-        if(!m){
-          return;
-        }
+        const d=path.getAttribute("d")||"";
+        const m=d.match(/^\s*[Mm]\s*([-+]?\d*\.?\d+)[,\s]+([-+]?\d*\.?\d+)/);
+        if(!m) return;
 
         let x=parseFloat(m[1]);
         let y=parseFloat(m[2]);
+        if(!Number.isFinite(x)||!Number.isFinite(y)) return;
+        x-=minX; y-=minY;
 
-        if(!Number.isFinite(x) || !Number.isFinite(y)){
-          return;
-        }
+        // 近接する開始点が重なる場合にだけ、番号を少しずらして読みやすくする。
+        const offsets=[
+          [-3,-3],[3,-3],[-3,3],[3,3],[-3,-4],[3,-4],[-4,3],[4,3],
+          [-3,-5],[3,-5],[-4,-4],[4,-4],[-4,4],[4,4],[-4,-5],[4,-5]
+        ];
+        const off=offsets[index%offsets.length];
+        const ox=off[0], oy=off[1];
 
-        /*
-          相対mの場合も扱う。
-          KanjiVGの通常データは絶対Mなので、ここではそのまま
-          座標として扱います。
-        */
-        x-=minX;
-        y-=minY;
+        const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+        const circle=document.createElementNS("http://www.w3.org/2000/svg","circle");
+        circle.setAttribute("class","strokeCircle");
+        circle.setAttribute("cx",x+ox);
+        circle.setAttribute("cy",y+oy);
+        circle.setAttribute("r","3.6");
 
-        const el=document.createElement("span");
+        const label=document.createElementNS("http://www.w3.org/2000/svg","text");
+        label.setAttribute("class","strokeLabel");
+        label.setAttribute("x",x+ox);
+        label.setAttribute("y",y+oy+0.15);
+        label.textContent=labels[index]||String(index+1);
 
-        el.className="strokeNum";
-        el.textContent=
-          circled[index] || String(index+1);
-
-        el.setAttribute(
-          "aria-label",
-          `第${index+1}画`
-        );
-
-        el.style.left=
-          (x/width*100)+"%";
-
-        el.style.top=
-          (y/height*100)+"%";
-
-        box.appendChild(el);
+        g.appendChild(circle);
+        g.appendChild(label);
+        layer.appendChild(g);
       });
 
-    }catch(error){
+      svg.appendChild(layer);
 
-      /*
-        書き順データ取得失敗時も、Apple Pencilを含む
-        漢字練習機能には影響させません。
-      */
-      console.warn(
-        "書き順データを読み込めませんでした。",
-        error
-      );
+    }catch(error){
+      console.warn("書き順データを読み込めませんでした。",error);
+      // 外部データ取得失敗時は、練習キャンバス自体には影響させない。
     }
   }
-
 
 
   setupCanvas($("trace"));
