@@ -20,6 +20,10 @@ h1{text-align:center;font-size:25px;margin:8px 0 16px}
 .day small{display:block;margin-top:3px}
 .notice{text-align:center;color:#666;padding:10px 0 2px}
 .week{text-align:center;color:#666;font-size:14px;margin-top:4px}
+.weekPicker{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:8px}
+.weekPicker label{font-size:14px;color:#666}
+.weekPicker select{font-size:16px;padding:7px 12px;border:1px solid #d8d5cf;border-radius:12px;background:#fff;color:#292929}
+
 .kanji{text-align:center;font-family:"Hiragino Mincho ProN","Yu Mincho",serif;font-size:118px;line-height:1;margin:8px 0 0}
 .read{text-align:center;font-size:16px;margin:8px 0 2px}
 .example{text-align:center;color:#666;font-size:14px;margin-bottom:10px}
@@ -64,6 +68,10 @@ button:active{transform:scale(.98)}
 </div>
 <div id="notice" class="notice"></div>
 <div id="week" class="week"></div>
+<div class="weekPicker">
+  <label for="weekSelect">確認する週：</label>
+  <select id="weekSelect"></select>
+</div>
 </section>
 <div id="app"></div>
 </main>
@@ -114,14 +122,19 @@ let weekIndex = weekNo-1;
 /* その週の5文字 */
 function weekItems(){
 
-  if(weekIndex < 40){
+  const selected =
+    $("weekSelect") ? Number($("weekSelect").value) : weekNo;
+
+  const selectedIndex=Math.max(0,selected-1);
+
+  if(selectedIndex < 40){
     return KANJI.slice(
-      weekIndex*5,
-      weekIndex*5+5
+      selectedIndex*5,
+      selectedIndex*5+5
     );
   }
 
-  const base=((weekIndex-40)*17)%KANJI.length;
+  const base=((selectedIndex-40)*17)%KANJI.length;
 
   return [0,1,2,3,4].map(i =>
     KANJI[(base+i*7)%KANJI.length]
@@ -172,12 +185,35 @@ document.querySelectorAll(".day").forEach(button => {
 });
 
 
-/* 週表示 */
-$("week").textContent =
-  weekNo<=40
-    ? `第${weekNo}週：新しい漢字 5字`
-    : `第${weekNo}週：復習週`;
+/* 週選択 */
+const weekSelect=$("weekSelect");
 
+for(let w=1;w<=40;w++){
+  const option=document.createElement("option");
+  option.value=w;
+  option.textContent=`第${w}週`;
+  weekSelect.appendChild(option);
+}
+
+weekSelect.value=Math.min(40,Math.max(1,weekNo));
+
+function updateWeekLabel(){
+
+  const selected=Number(weekSelect.value);
+
+  $("week").textContent =
+    selected<=40
+      ? `第${selected}週：新しい漢字 5字`
+      : `第${selected}週：復習週`;
+}
+
+weekSelect.addEventListener("change",()=>{
+  weekIndex=Number(weekSelect.value)-1;
+  updateWeekLabel();
+  render(todayDay);
+});
+
+updateWeekLabel();
 
 /* 初期表示 */
 render(todayDay);
@@ -251,7 +287,7 @@ function render(d){
 
 function renderStudy(item,d){
 
-  const key="done_"+weekNo+"_"+d;
+  const selectedWeek=Number($("weekSelect").value);\n  const key="done_"+selectedWeek+"_"+d;
 
   const done=load(key,false);
 
@@ -476,7 +512,7 @@ function clearCanvas(c){
 function renderTest(items){
 
   const state=load(
-    "test_"+weekNo,
+    "test_"+Number($("weekSelect").value),
     [false,false,false,false,false]
   );
 
@@ -530,7 +566,7 @@ function renderTest(items){
     button.onclick=()=>{
       const i=Number(button.dataset.done);
       state[i]=!state[i];
-      save("test_"+weekNo,state);
+      save("test_"+Number($("weekSelect").value),state);
       button.textContent=state[i] ? "✓ できた" : "○ できた";
       $("score").textContent=state.filter(Boolean).length+" / 5";
     };
