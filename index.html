@@ -27,7 +27,7 @@ h1{text-align:center;font-size:25px;margin:8px 0 16px}
 .panel{border:2px solid #ddd9d2;border-radius:18px;padding:10px}
 .panel h2{font-size:18px;margin:0 0 8px}
 .canvasWrap{position:relative;width:100%;aspect-ratio:1.15;background:#fff;border:2px solid #d8d5cf;border-radius:16px;overflow:hidden;touch-action:none}
-.traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;user-select:none}.traceSvg{width:78%;height:78%;overflow:visible}.traceSvg path{fill:#ddd9d1;stroke:none;opacity:1;transition:opacity .18s ease}.traceSvg [id*="StrokeNumbers"]{display:none!important}.traceSvg text{display:none!important}.strokeLabels,.strokeNums{display:none}.strokeOrderNote{text-align:center;color:#666;font-size:13px;margin-top:6px;min-height:20px}.strokeAnimation{display:flex;justify-content:center;margin-top:8px}.strokeAnimation button{min-width:170px}.strokeStep{fill:#e7e3dc!important;opacity:.55!important}.strokeCurrent{fill:#aaa59d!important;opacity:.82!important}
+.traceChar{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;user-select:none}.traceSvg{width:78%;height:78%;overflow:visible}.traceSvg path{fill:#b8b5af;stroke:none;opacity:1;transition:opacity .18s ease}.traceSvg [id*="StrokeNumbers"]{display:none!important}.traceSvg text{display:none!important}.strokeLabels,.strokeNums{display:none}.strokeOrderNote{text-align:center;color:#666;font-size:13px;margin-top:6px;min-height:20px}.strokeAnimation{display:flex;justify-content:center;margin-top:8px}.strokeAnimation button{min-width:170px}.strokeStep{fill:#b8b5af!important;opacity:1!important}.strokeCurrent{fill:#b8b5af!important;opacity:1!important}
 
 canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-user-drag:none;outline:none;cursor:crosshair}
 .actions{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px}
@@ -316,7 +316,7 @@ function renderStudy(item,d){
           </div>
 
           <div class="strokeOrderNote" id="strokeOrderStatus">
-            「書き順を見る」で、①→②→③…の順に練習できます。
+            1画ずつ順番に表示します。
           </div>
 
           <div class="strokeAnimation">
@@ -376,7 +376,7 @@ function renderStudy(item,d){
   /*
     書き順アニメーション
     番号を漢字の上に重ねず、「いま何画目か」を下の説明欄に表示します。
-    各画は太くせず、実際の薄い漢字の線を順番に現す方式です。
+    各画を同じ色・同じ太さで、順番に1画ずつ現す方式です。
   */
   loadStrokeAnimation(item.k);
 
@@ -412,7 +412,7 @@ function renderStudy(item,d){
 
       paths.forEach(p=>{
         p.classList.remove("strokeStep","strokeCurrent");
-        p.setAttribute("fill","#e7e3dc");
+        p.setAttribute("fill","#b8b5af");
         p.setAttribute("stroke","none");
         p.style.opacity="1";
       });
@@ -428,10 +428,10 @@ function renderStudy(item,d){
         }
         paths.forEach(p=>{
           p.classList.remove("strokeStep","strokeCurrent");
-          p.setAttribute("fill","#e7e3dc");
+          p.setAttribute("fill","#b8b5af");
           p.style.opacity="1";
         });
-        if(status) status.textContent="「書き順を見る」で、①→②→③…の順に練習できます。";
+        if(status) status.textContent="1画ずつ順番に表示します。";
         orderButton.disabled=false;
         orderButton.textContent="▶ 書き順を見る";
       }
@@ -445,7 +445,7 @@ function renderStudy(item,d){
         // 最初は全画を非表示にして、1画ずつ自然に現す。
         paths.forEach(p=>{
           p.classList.remove("strokeStep","strokeCurrent");
-          p.setAttribute("fill","#e7e3dc");
+          p.setAttribute("fill","#b8b5af");
           p.style.opacity="0";
         });
 
@@ -457,13 +457,12 @@ function renderStudy(item,d){
           if(thisRun!==runId) return;
 
           if(i < paths.length){
-            // 今の1画だけを少し濃くし、前の画は薄く残す。
+            // すべての画を同じ色・同じ太さで残し、1画ずつ順番に表示します。
             if(i>0){
               paths[i-1].classList.remove("strokeCurrent");
               paths[i-1].classList.add("strokeStep");
             }
-            paths[i].classList.remove("strokeStep");
-            paths[i].classList.add("strokeCurrent");
+            paths[i].classList.remove("strokeStep","strokeCurrent");
             paths[i].style.opacity="1";
             if(status){
               const circled = i < 20 ? String.fromCodePoint(0x2460+i) : `${i+1}`;
@@ -476,6 +475,7 @@ function renderStudy(item,d){
               p.classList.remove("strokeCurrent");
               p.classList.add("strokeStep");
               p.style.opacity="1";
+              p.setAttribute("fill","#b8b5af");
             });
             if(status) status.textContent="書き順はおしまいです。もう一度見ることもできます。";
             orderButton.disabled=false;
