@@ -361,6 +361,7 @@ function setupCanvas(c){
   let drawing=false;
   let lastX=0;
   let lastY=0;
+  let activePointerId=null;
 
 
   function resize(){
@@ -375,7 +376,6 @@ function setupCanvas(c){
       )
     );
 
-
     c.width=Math.max(
       1,
       Math.round(r.width*dpr)
@@ -386,7 +386,6 @@ function setupCanvas(c){
       Math.round(r.height*dpr)
     );
 
-
     ctx.setTransform(
       dpr,
       0,
@@ -396,13 +395,9 @@ function setupCanvas(c){
       0
     );
 
-
     ctx.lineCap="round";
     ctx.lineJoin="round";
-
-    /* 少し細めで自然な書き心地 */
     ctx.lineWidth=5;
-
     ctx.strokeStyle="#111";
     ctx.fillStyle="#111";
   }
@@ -417,61 +412,56 @@ function setupCanvas(c){
   );
 
 
-  function getPoint(touch){
+  function getPoint(e){
 
     const r=c.getBoundingClientRect();
 
     return {
-
       x:Math.max(
         0,
         Math.min(
           r.width,
-          touch.clientX-r.left
+          e.clientX-r.left
         )
       ),
-
       y:Math.max(
         0,
         Math.min(
           r.height,
-          touch.clientY-r.top
+          e.clientY-r.top
         )
       )
     };
   }
 
 
-  /* 書き始め */
-  function startTouch(e){
-
-    e.preventDefault();
+  /* Apple Pencil / 指：書き始め */
+  function startPointer(e){
 
     if(
-      !e.touches ||
-      e.touches.length===0
+      e.pointerType!=="pen" &&
+      e.pointerType!=="touch" &&
+      e.pointerType!=="mouse"
     ){
       return;
     }
 
+    e.preventDefault();
 
-    const p=getPoint(
-      e.touches[0]
-    );
+    activePointerId=e.pointerId;
 
+    try{
+      c.setPointerCapture(e.pointerId);
+    }catch(err){}
+
+    const p=getPoint(e);
 
     drawing=true;
-
     lastX=p.x;
     lastY=p.y;
 
-
-    /*
-      最初のタップを確実に
-      反映させる
-    */
+    /* 最初のタップも確実に点として反映 */
     ctx.beginPath();
-
     ctx.arc(
       lastX,
       lastY,
@@ -479,43 +469,27 @@ function setupCanvas(c){
       0,
       Math.PI*2
     );
-
     ctx.fill();
   }
 
 
-  /* Pencilを動かしている間 */
-  function moveTouch(e){
-
-    if(!drawing){
-      return;
-    }
-
-
-    e.preventDefault();
-
+  /* Apple Pencil / 指：移動 */
+  function movePointer(e){
 
     if(
-      !e.touches ||
-      e.touches.length===0
+      !drawing ||
+      e.pointerId!==activePointerId
     ){
       return;
     }
 
+    e.preventDefault();
 
-    const p=getPoint(
-      e.touches[0]
-    );
-
+    const p=getPoint(e);
 
     const dx=p.x-lastX;
     const dy=p.y-lastY;
 
-
-    /*
-      小さな移動も捨てない
-      → 線が途中で切れにくい
-    */
     if(
       Math.abs(dx)<0.05 &&
       Math.abs(dy)<0.05
@@ -523,61 +497,77 @@ function setupCanvas(c){
       return;
     }
 
-
     ctx.beginPath();
-
-    ctx.moveTo(
-      lastX,
-      lastY
-    );
-
-    ctx.lineTo(
-      p.x,
-      p.y
-    );
-
+    ctx.moveTo(lastX,lastY);
+    ctx.lineTo(p.x,p.y);
     ctx.stroke();
-
 
     lastX=p.x;
     lastY=p.y;
   }
 
 
-  /* 指・Pencilを離した */
-  function endTouch(e){
+  /* Apple Pencil / 指：終了 */
+  function endPointer(e){
+
+    if(
+      activePointerId!==null &&
+      e.pointerId!==activePointerId
+    ){
+      return;
+    }
 
     e.preventDefault();
 
     drawing=false;
+
+    try{
+      if(c.hasPointerCapture(e.pointerId)){
+        c.releasePointerCapture(e.pointerId);
+      }
+    }catch(err){}
+
+    activePointerId=null;
   }
 
 
   /*
-    iPadではtouchイベントを使用
-    → Apple Pencilで線が途切れにくい
+    Pointer Eventsを使用
+    → iPad Safari / Apple Pencilで安定して入力
+    → 指でも書ける
+    → 線が途中で切れにくい
   */
   c.addEventListener(
-    "touchstart",
-    startTouch,
+    "pointerdown",
+    startPointer,
     {passive:false}
   );
 
   c.addEventListener(
-    "touchmove",
-    moveTouch,
+    "pointermove",
+    movePointer,
     {passive:false}
   );
 
   c.addEventListener(
-    "touchend",
-    endTouch,
+    "pointerup",
+    endPointer,
     {passive:false}
   );
 
   c.addEventListener(
-    "touchcancel",
-    endTouch,
+    "pointercancel",
+    endPointer,
+    {passive:false}
+  );
+
+  c.addEventListener(
+    "pointerleave",
+    e => {
+      if(drawing && e.pointerType==="mouse"){
+        endPointer(e);
+      }
+    },
     {passive:false}
   );
 }
