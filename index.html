@@ -316,7 +316,7 @@ function renderStudy(item,d){
           </div>
 
           <div class="strokeOrderNote" id="strokeOrderStatus">
-            1画ずつ順番に表示します。
+            1画ずつ、順番に見ていきます。
           </div>
 
           <div class="strokeAnimation">
@@ -410,11 +410,18 @@ function renderStudy(item,d){
       // KanjiVGの「書き順番号」などの補助表示は完全に取り除く。
       svg.querySelectorAll('[id*="StrokeNumbers"], text').forEach(el=>el.remove());
 
+      /* 書き順表示は「太い黒線」に見えないよう、
+         すべての画を同じ淡い色で表示し、現在の1画だけを少し見やすくします。
+         数字や太線による強調は使いません。 */
+      const GUIDE = "#9a9a9a";
+      const GUIDE_OPACITY = "0.62";
+      const ACTIVE_OPACITY = "0.62";
+
       paths.forEach(p=>{
         p.classList.remove("strokeStep","strokeCurrent");
-        p.setAttribute("fill","#b8b5af");
+        p.setAttribute("fill",GUIDE);
         p.setAttribute("stroke","none");
-        p.style.opacity="1";
+        p.style.opacity=GUIDE_OPACITY;
       });
 
       let timer=null;
@@ -428,10 +435,10 @@ function renderStudy(item,d){
         }
         paths.forEach(p=>{
           p.classList.remove("strokeStep","strokeCurrent");
-          p.setAttribute("fill","#b8b5af");
-          p.style.opacity="1";
+          p.setAttribute("fill",GUIDE);
+          p.style.opacity=GUIDE_OPACITY;
         });
-        if(status) status.textContent="1画ずつ順番に表示します。";
+        if(status) status.textContent="1画ずつ、順番に見ていきます。";
         orderButton.disabled=false;
         orderButton.textContent="▶ 書き順を見る";
       }
@@ -445,7 +452,7 @@ function renderStudy(item,d){
         // 最初は全画を非表示にして、1画ずつ自然に現す。
         paths.forEach(p=>{
           p.classList.remove("strokeStep","strokeCurrent");
-          p.setAttribute("fill","#b8b5af");
+          p.setAttribute("fill",GUIDE);
           p.style.opacity="0";
         });
 
@@ -457,13 +464,14 @@ function renderStudy(item,d){
           if(thisRun!==runId) return;
 
           if(i < paths.length){
-            // すべての画を同じ色・同じ太さで残し、1画ずつ順番に表示します。
+            // すべての画を同じ色・同じ太さで残し、1画ずつ、順番に見ていきます。
             if(i>0){
               paths[i-1].classList.remove("strokeCurrent");
               paths[i-1].classList.add("strokeStep");
             }
             paths[i].classList.remove("strokeStep","strokeCurrent");
-            paths[i].style.opacity="1";
+            paths[i].setAttribute("fill",GUIDE);
+            paths[i].style.opacity=ACTIVE_OPACITY;
             if(status){
               const circled = i < 20 ? String.fromCodePoint(0x2460+i) : `${i+1}`;
               status.textContent=`${circled} ${i+1}画目を書きます`;
@@ -474,8 +482,8 @@ function renderStudy(item,d){
             paths.forEach(p=>{
               p.classList.remove("strokeCurrent");
               p.classList.add("strokeStep");
-              p.style.opacity="1";
-              p.setAttribute("fill","#b8b5af");
+              p.style.opacity=GUIDE_OPACITY;
+              p.setAttribute("fill",GUIDE);
             });
             if(status) status.textContent="書き順はおしまいです。もう一度見ることもできます。";
             orderButton.disabled=false;
