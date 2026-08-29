@@ -161,25 +161,24 @@ function renderStudy(item,d){
   window.addEventListener("resize",resize);
 
   let drawing=false;
-  let activePointerId=null;
   let last=null;
 
-  function pos(e){
+  function pos(t){
     const r=rect();
     return {
-      x:Math.max(0,Math.min(r.width,e.clientX-r.left)),
-      y:Math.max(0,Math.min(r.height,e.clientY-r.top))
+      x:Math.max(0,Math.min(r.width,t.clientX-r.left)),
+      y:Math.max(0,Math.min(r.height,t.clientY-r.top))
     };
   }
 
-  function drawPoint(p){
+  function dot(p){
     const ctx=c.getContext("2d");
     ctx.beginPath();
     ctx.arc(p.x,p.y,3,0,Math.PI*2);
     ctx.fill();
   }
 
-  function drawLine(a,b){
+  function line(a,b){
     const ctx=c.getContext("2d");
     ctx.beginPath();
     ctx.moveTo(a.x,a.y);
@@ -187,76 +186,62 @@ function renderStudy(item,d){
     ctx.stroke();
   }
 
-  function start(e){
-    if(activePointerId!==null)return;
+  function startTouch(e){
+    if(!e.touches || !e.touches.length)return;
 
     e.preventDefault();
 
-    activePointerId=e.pointerId;
     drawing=true;
+    last=pos(e.touches[0]);
 
-    try{
-      c.setPointerCapture(e.pointerId);
-    }catch(_){}
-
-    last=pos(e);
-
-    // 書き始めの1点を確実に描く
-    drawPoint(last);
+    dot(last);
   }
 
-  function move(e){
-    if(!drawing || e.pointerId!==activePointerId)return;
+  function moveTouch(e){
+    if(!drawing || !e.touches || !e.touches.length)return;
 
     e.preventDefault();
 
-    const events =
-      typeof e.getCoalescedEvents==="function"
-      ? e.getCoalescedEvents()
-      : [e];
+    const p=pos(e.touches[0]);
 
-    for(const ev of events){
-      const p=pos(ev);
+    if(last){
+      const dx=p.x-last.x;
+      const dy=p.y-last.y;
 
-      if(last){
-        const dx=p.x-last.x;
-        const dy=p.y-last.y;
+      const distance=Math.sqrt(dx*dx+dy*dy);
 
-        if(Math.abs(dx)+Math.abs(dy)>=0.2){
-          drawLine(last,p);
-          last=p;
+      // 大きく飛んだ場合も線を途中で切らずにつなぐ
+      if(distance>0.2){
+        const steps=Math.max(1,Math.ceil(distance/3));
+
+        for(let i=1;i<=steps;i++){
+          const q={
+            x:last.x+(p.x-last.x)*i/steps,
+            y:last.y+(p.y-last.y)*i/steps
+          };
+          line(last,q);
+          last=q;
         }
-      }else{
-        last=p;
       }
+    }else{
+      last=p;
     }
   }
 
-  function end(e){
-    if(e.pointerId!==activePointerId)return;
+  function endTouch(e){
+    if(!drawing)return;
 
     e.preventDefault();
 
     drawing=false;
     last=null;
-
-    try{
-      c.releasePointerCapture(e.pointerId);
-    }catch(_){}
-
-    activePointerId=null;
   }
 
-  c.addEventListener("pointerdown",start,{passive:false});
-  c.addEventListener("pointermove",move,{passive:false});
-  c.addEventListener("pointerup",end,{passive:false});
-  c.addEventListener("pointercancel",end,{passive:false});
-
-  c.addEventListener("lostpointercapture",()=>{
-    drawing=false;
-    last=null;
-    activePointerId=null;
-  });
+  // Apple Pencil / iPad用
+  c.addEventListener("touchstart",startTouch,{passive:false});
+  c.addEventListener("touchmove",moveTouch,{passive:false});
+  c.addEventListener("touchend",endTouch,{passive:false});
+  c.addEventListener("touchcancel",endTouch,{passive:false});
 }
 function clearCanvas(c){
   const ctx=c.getContext("2d");
