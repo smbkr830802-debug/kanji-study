@@ -393,16 +393,10 @@ function setupCanvas(c){
   const ctx=c.getContext("2d", {alpha:true});
 
   let drawing=false;
+  let activePointerId=null;
   let lastX=0;
   let lastY=0;
-  let activePointerId=null;
-
-  /*
-    iPad / Apple Pencilでは pointermove よりも
-    pointerrawupdate の方が細かな入力を早く受け取れる環境があります。
-    対応している場合はこちらを優先し、非対応なら pointermove を使います。
-  */
-  const supportsRaw = "onpointerrawupdate" in window;
+  let hasPoint=false;
 
 
   function resize(){
@@ -411,105 +405,88 @@ function setupCanvas(c){
 
     const dpr=Math.max(
       1,
-      Math.min(
-        3,
-        window.devicePixelRatio || 1
-      )
+      Math.min(3, window.devicePixelRatio || 1)
     );
 
-    c.width=Math.max(
-      1,
-      Math.round(r.width*dpr)
-    );
+    c.width=Math.max(1,Math.round(r.width*dpr));
+    c.height=Math.max(1,Math.round(r.height*dpr));
 
-    c.height=Math.max(
-      1,
-      Math.round(r.height*dpr)
-    );
-
-    ctx.setTransform(
-      dpr,
-      0,
-      0,
-      dpr,
-      0,
-      0
-    );
+    ctx.setTransform(dpr,0,0,dpr,0,0);
 
     ctx.lineCap="round";
     ctx.lineJoin="round";
     ctx.lineWidth=5;
     ctx.strokeStyle="#111";
-    ctx.fillStyle="#111";
   }
 
-
   resize();
+  window.addEventListener("resize",resize);
 
 
-  window.addEventListener(
-    "resize",
-    resize
-  );
-
-
-  function getPoint(e){
+  function point(e){
 
     const r=c.getBoundingClientRect();
 
     return {
-      x:Math.max(
-        0,
-        Math.min(
-          r.width,
-          e.clientX-r.left
-        )
-      ),
-      y:Math.max(
-        0,
-        Math.min(
-          r.height,
-          e.clientY-r.top
-        )
-      )
+      x:e.clientX-r.left,
+      y:e.clientY-r.top
     };
   }
 
 
-  function drawMove(e){
+  /*
+    2点を直線でつなぐだけでは、iPadで低速に動かしたときに
+    「カクつき」「書き始めの遅れ」が見えやすくなります。
+    中間点を使ったquadraticCurveToで、入力点をすぐ画面へ反映します。
+  */
+  function drawTo(p){
+
+    if(!hasPoint){
+
+      lastX=p.x;
+      lastY=p.y;
+      hasPoint=true;
+
+      ctx.beginPath();
+      ctx.arc(lastX,lastY,2.5,0,Math.PI*2);
+      ctx.fillStyle="#111";
+      ctx.fill();
+
+      return;
+    }
+
+    const midX=(lastX+p.x)/2;
+    const midY=(lastY+p.y)/2;
+
+    ctx.beginPath();
+    ctx.moveTo(lastX,lastY);
+    ctx.quadraticCurveTo(
+      lastX,
+      lastY,
+      midX,
+      midY
+    );
+    ctx.stroke();
+
+    lastX=p.x;
+    lastY=p.y;
+  }
+
+
+  function drawEvents(e){
 
     const events =
-      typeof e.getCoalescedEvents === "function"
+      typeof e.getCoalescedEvents==="function"
         ? e.getCoalescedEvents()
         : [e];
 
     for(const ev of events){
-
-      const p=getPoint(ev);
-
-      const dx=p.x-lastX;
-      const dy=p.y-lastY;
-
-      if(
-        Math.abs(dx)<0.001 &&
-        Math.abs(dy)<0.001
-      ){
-        continue;
-      }
-
-      ctx.beginPath();
-      ctx.moveTo(lastX,lastY);
-      ctx.lineTo(p.x,p.y);
-      ctx.stroke();
-
-      lastX=p.x;
-      lastY=p.y;
+      drawTo(point(ev));
     }
   }
 
 
-  /* Apple Pencil / 指：書き始め */
-  function startPointer(e){
+  function start(e){
 
     if(
       e.pointerType!=="pen" &&
@@ -521,36 +498,21 @@ function setupCanvas(c){
 
     e.preventDefault();
 
-    activePointerId=e.pointerId;
     drawing=true;
+    activePointerId=e.pointerId;
+    hasPoint=false;
 
-    const p=getPoint(e);
-
-    lastX=p.x;
-    lastY=p.y;
+    drawTo(point(e));
 
     /*
-      pointerdownの瞬間に小さな点を描く。
-      最初のpointermoveを待たないので、書き始めの空白をなくします。
+      pointer captureを使うと、一部のiPadOS/Safari環境で
+      Pencilの最初の入力が遅く感じられることがあるため、
+      あえてcaptureを使用しません。
     */
-    ctx.beginPath();
-    ctx.arc(
-      lastX,
-      lastY,
-      2.5,
-      0,
-      Math.PI*2
-    );
-    ctx.fill();
-
-    try{
-      c.setPointerCapture(e.pointerId);
-    }catch(err){}
   }
 
 
-  /* 高速入力：pointerrawupdate */
-  function rawPointer(e){
+  function move(e){
 
     if(
       !drawing ||
@@ -560,27 +522,11 @@ function setupCanvas(c){
     }
 
     e.preventDefault();
-    drawMove(e);
+    drawEvents(e);
   }
 
 
-  /* 通常入力：pointermove */
-  function movePointer(e){
-
-    if(
-      !drawing ||
-      e.pointerId!==activePointerId
-    ){
-      return;
-    }
-
-    e.preventDefault();
-    drawMove(e);
-  }
-
-
-  /* Apple Pencil / 指：終了 */
-  function endPointer(e){
+  function end(e){
 
     if(
       activePointerId!==null &&
@@ -592,65 +538,32 @@ function setupCanvas(c){
     e.preventDefault();
 
     drawing=false;
-
-    try{
-      if(c.hasPointerCapture(e.pointerId)){
-        c.releasePointerCapture(e.pointerId);
-      }
-    }catch(err){}
-
     activePointerId=null;
+    hasPoint=false;
   }
 
 
   c.addEventListener(
     "pointerdown",
-    startPointer,
+    start,
     {passive:false}
   );
 
-  /*
-    Safariがpointerrawupdateに対応している場合は、
-    pointermoveとの二重描画を避けるためrawupdateだけを使用。
-  */
-  if(supportsRaw){
-
-    c.addEventListener(
-      "pointerrawupdate",
-      rawPointer,
-      {passive:false}
-    );
-
-  }else{
-
-    c.addEventListener(
-      "pointermove",
-      movePointer,
-      {passive:false}
-    );
-
-  }
-
+  c.addEventListener(
+    "pointermove",
+    move,
+    {passive:false}
+  );
 
   c.addEventListener(
     "pointerup",
-    endPointer,
+    end,
     {passive:false}
   );
 
   c.addEventListener(
     "pointercancel",
-    endPointer,
-    {passive:false}
-  );
-
-  c.addEventListener(
-    "pointerleave",
-    e => {
-      if(drawing && e.pointerType==="mouse"){
-        endPointer(e);
-      }
-    },
+    end,
     {passive:false}
   );
 }
