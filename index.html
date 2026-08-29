@@ -66,9 +66,7 @@ button:active{transform:scale(.98)}
 <div id="week" class="week"></div>
 <div style="text-align:center;margin-top:10px">
   <label for="weekSelect">確認する週：</label>
-  <select id="weekSelect" style="font-size:16px;padding:7px 12px;border:1px solid #d8d5cf;border-radius:10px;background:#fff">
-    ${Array.from({length:40},(_,i)=>`<option value="${i+1}">第${i+1}週</option>`).join("")}
-  </select>
+  <select id="weekSelect" style="font-size:16px;padding:7px 12px;border:1px solid #d8d5cf;border-radius:10px;background:#fff"></select>
 </div>
 </section>
 <div id="app"></div>
@@ -187,10 +185,22 @@ function updateWeekDisplay(){
 }
 
 /* 週を選んで確認 */
-$("weekSelect").value = String(Math.min(40,Math.max(1,weekNo)));
+const weekSelect = $("weekSelect");
 
-$("weekSelect").addEventListener("change",()=>{
-  weekNo = Number($("weekSelect").value);
+/* 第1週〜第40週をJavaScriptで生成する
+   ※HTMLの中に ${...} を直接書くと、そのまま文字として表示されるため、
+      ここでoptionを作る */
+for(let i=1;i<=40;i++){
+  const option=document.createElement("option");
+  option.value=String(i);
+  option.textContent=`第${i}週`;
+  weekSelect.appendChild(option);
+}
+
+weekSelect.value = String(Math.min(40,Math.max(1,weekNo)));
+
+weekSelect.addEventListener("change",()=>{
+  weekNo = Number(weekSelect.value);
   weekIndex = weekNo-1;
   updateWeekDisplay();
 
