@@ -720,6 +720,247 @@ function installDrawingEvents(){
   );
 
 
+  /*
+    iPad Safari用の最後のフォールバック。
+    Apple PencilはTouchEvent側でも stylus として公開されるため、
+    PointerEventの開始を取りこぼした場合はこちらで拾う。
+    PointerEventと同時に発火しても二重描画しない。
+  */
+
+  const activeStylusTouches = new Map();
+
+  function stylusTouchPoint(touch){
+
+    const c=document.elementFromPoint(
+      touch.clientX,
+      touch.clientY
+    );
+
+    if(
+      c &&
+      c.tagName==="CANVAS"
+    ){
+      return c;
+    }
+
+    if(
+      c &&
+      c.closest
+    ){
+      return c.closest("canvas");
+    }
+
+    return null;
+  }
+
+
+  function startStylusTouch(touch){
+
+    if(touch.touchType!=="stylus"){
+      return;
+    }
+
+    const c=stylusTouchPoint(touch);
+
+    if(!c){
+      return;
+    }
+
+    /*
+      PointerEventがすでに正常に開始している場合は、
+      TouchEvent側では描画しない。
+    */
+    for(const state of activePens.values()){
+      if(state.drawing){
+        return;
+      }
+    }
+
+    const state=prepareCanvas(c);
+
+    const fakeEvent={
+      pointerId:("touch-"+touch.identifier),
+      clientX:touch.clientX,
+      clientY:touch.clientY
+    };
+
+    state.drawing=true;
+    state.pointerId=fakeEvent.pointerId;
+
+    const p=getCanvasPoint(
+      c,
+      fakeEvent
+    );
+
+    state.lastX=p.x;
+    state.lastY=p.y;
+
+    state.ctx.beginPath();
+    state.ctx.arc(
+      p.x,
+      p.y,
+      2.8,
+      0,
+      Math.PI*2
+    );
+    state.ctx.fill();
+
+    activeStylusTouches.set(
+      touch.identifier,
+      state
+    );
+  }
+
+
+  function moveStylusTouch(touch){
+
+    if(touch.touchType!=="stylus"){
+      return;
+    }
+
+    let state=activeStylusTouches.get(
+      touch.identifier
+    );
+
+    /*
+      touchstartを取りこぼした場合でも、
+      最初のtouchmoveから描画を開始する。
+    */
+    if(!state){
+
+      startStylusTouch(touch);
+
+      state=activeStylusTouches.get(
+        touch.identifier
+      );
+
+      if(!state){
+        return;
+      }
+
+      return;
+    }
+
+    const fakeEvent={
+      pointerId:("touch-"+touch.identifier),
+      clientX:touch.clientX,
+      clientY:touch.clientY
+    };
+
+    moveDrawing(
+      state,
+      fakeEvent
+    );
+  }
+
+
+  function finishStylusTouch(touch){
+
+    const state=activeStylusTouches.get(
+      touch.identifier
+    );
+
+    if(!state){
+      return;
+    }
+
+    state.drawing=false;
+    state.pointerId=null;
+
+    activeStylusTouches.delete(
+      touch.identifier
+    );
+  }
+
+
+  document.addEventListener(
+    "touchstart",
+    e=>{
+
+      let used=false;
+
+      for(const touch of e.changedTouches){
+
+        if(touch.touchType==="stylus"){
+
+          startStylusTouch(touch);
+          used=true;
+        }
+      }
+
+      if(used){
+        e.preventDefault();
+      }
+    },
+    {
+      passive:false,
+      capture:true
+    }
+  );
+
+
+  document.addEventListener(
+    "touchmove",
+    e=>{
+
+      let used=false;
+
+      for(const touch of e.changedTouches){
+
+        if(touch.touchType==="stylus"){
+
+          moveStylusTouch(touch);
+          used=true;
+        }
+      }
+
+      if(used){
+        e.preventDefault();
+      }
+    },
+    {
+      passive:false,
+      capture:true
+    }
+  );
+
+
+  document.addEventListener(
+    "touchend",
+    e=>{
+
+      for(const touch of e.changedTouches){
+
+        if(touch.touchType==="stylus"){
+          finishStylusTouch(touch);
+        }
+      }
+    },
+    {
+      passive:false,
+      capture:true
+    }
+  );
+
+
+  document.addEventListener(
+    "touchcancel",
+    e=>{
+
+      for(const touch of e.changedTouches){
+
+        if(touch.touchType==="stylus"){
+          finishStylusTouch(touch);
+        }
+      }
+    },
+    {
+      passive:false,
+      capture:true
+    }
+  );
+
+
   document.addEventListener(
     "pointerup",
     finishDrawing,
