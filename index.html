@@ -187,21 +187,19 @@ function updateWeekDisplay(){
 /* 週を選んで確認 */
 const weekSelect = $("weekSelect");
 
-/* 第1週〜第40週をJavaScriptで生成する
-   ※HTMLの中に ${...} を直接書くと、そのまま文字として表示されるため、
-      ここでoptionを作る */
-for(let i=1;i<=40;i++){
-  const option=document.createElement("option");
-  option.value=String(i);
-  option.textContent=`第${i}週`;
+/* 第1週〜第40週をここで生成する */
+for(let i=1; i<=40; i++){
+  const option = document.createElement("option");
+  option.value = String(i);
+  option.textContent = "第" + i + "週";
   weekSelect.appendChild(option);
 }
 
-weekSelect.value = String(Math.min(40,Math.max(1,weekNo)));
+weekSelect.value = String(Math.min(40, Math.max(1, weekNo)));
 
 weekSelect.addEventListener("change",()=>{
   weekNo = Number(weekSelect.value);
-  weekIndex = weekNo-1;
+  weekIndex = weekNo - 1;
   updateWeekDisplay();
 
   /* 選んだ週をすぐ確認できるよう、月曜日を表示 */
@@ -521,25 +519,39 @@ function setupCanvas(c){
 
     e.preventDefault();
 
-    const p=getPoint(e);
+    /*
+      iPad / Apple Pencilでは、1回のpointermoveの中に
+      複数の細かな座標が入っていることがあります。
+      それらをまとめて描くことで、書き始めやゆっくりした
+      動きでの「最初の一線の遅れ」を減らします。
+    */
+    const events =
+      typeof e.getCoalescedEvents === "function"
+        ? e.getCoalescedEvents()
+        : [e];
 
-    const dx=p.x-lastX;
-    const dy=p.y-lastY;
+    for(const ev of events){
 
-    if(
-      Math.abs(dx)<0.05 &&
-      Math.abs(dy)<0.05
-    ){
-      return;
+      const p=getPoint(ev);
+
+      const dx=p.x-lastX;
+      const dy=p.y-lastY;
+
+      if(
+        Math.abs(dx)<0.01 &&
+        Math.abs(dy)<0.01
+      ){
+        continue;
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(lastX,lastY);
+      ctx.lineTo(p.x,p.y);
+      ctx.stroke();
+
+      lastX=p.x;
+      lastY=p.y;
     }
-
-    ctx.beginPath();
-    ctx.moveTo(lastX,lastY);
-    ctx.lineTo(p.x,p.y);
-    ctx.stroke();
-
-    lastX=p.x;
-    lastY=p.y;
   }
 
 
@@ -669,7 +681,7 @@ function renderTest(items){
         ${items.map((it,i)=>`
           <div class="testItem">
             <div class="q">第${i+1}問</div>
-            <div class="testReading">${esc(it.r.split("・")[0])}</div>
+            <div class="testReading">${esc(it.r.replaceAll("・","、"))}</div>
             <div class="testCanvasWrap">
               <canvas id="testCanvas${i}"></canvas>
             </div>
