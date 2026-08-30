@@ -42,7 +42,7 @@ button:active{transform:scale(.98)}
 .testReading{font-size:18px;font-weight:600;margin:4px 0 6px}
 .testCanvasWrap{position:relative;width:100%;height:150px;background:#fff;border:2px solid #d8d5cf;border-radius:12px;overflow:hidden;touch-action:none}
 .testCanvasWrap canvas{position:absolute;inset:0}
-.testMyAnswer{font-size:13px;color:#777;margin:4px 0}
+.testMyAnswer{font-size:13px;color:#777;margin:4px 0}.testClear{font-size:14px;padding:8px 14px;margin-top:4px}
 
 .score{text-align:center;font-size:28px;font-weight:700;margin:10px}
 .rest{text-align:center;padding:35px 10px;font-size:18px;color:#666}
@@ -1186,6 +1186,9 @@ function renderTest(items){
             <button class="secondary" data-done="${i}">
               ${state[i] ? "✓ できた" : "○ できた"}
             </button>
+            <button class="secondary testClear" data-clear-test="${i}">
+              消す
+            </button>
           </div>
         `).join("")}
       </div>
@@ -1217,6 +1220,14 @@ function renderTest(items){
       save("test_"+weekNo,state);
       button.textContent=state[i] ? "✓ できた" : "○ できた";
       $("score").textContent=state.filter(Boolean).length+" / 5";
+    };
+  });
+
+  document.querySelectorAll("[data-clear-test]").forEach(button=>{
+    button.onclick=()=>{
+      const i=Number(button.dataset.clearTest);
+      const canvas=$("testCanvas"+i);
+      if(canvas) clearCanvas(canvas);
     };
   });
 
