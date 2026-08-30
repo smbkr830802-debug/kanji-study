@@ -381,81 +381,56 @@ function renderStudy(item,d){
   loadStrokeAnimation(item.k);
 
   async function loadStrokeAnimation(kanji){
-
     const svg=$("traceSvg");
     const orderButton=$("showStrokeOrder");
     const status=$("strokeOrderStatus");
     if(!svg || !orderButton) return;
 
     svg.innerHTML="";
-
     const hex=kanji.codePointAt(0).toString(16).toLowerCase().padStart(5,"0");
     const url=`https://cdn.jsdelivr.net/gh/KanjiVG/kanjivg@master/kanji/${hex}.svg`;
 
     try{
       const response=await fetch(url,{cache:"force-cache"});
       if(!response.ok) throw new Error("stroke data unavailable");
-
       const svgText=await response.text();
       const doc=new DOMParser().parseFromString(svgText,"image/svg+xml");
       const sourceSvg=doc.documentElement;
-
       const vb=sourceSvg.getAttribute("viewBox") || "0 0 109 109";
       svg.setAttribute("viewBox",vb);
       svg.innerHTML=sourceSvg.innerHTML;
 
-      // KanjiVGの筆画は「塗りつぶされた筆画形状」なので、そのままだと太く見えます。
-      // SVGのerodeフィルターで筆画を少しだけ細くして、通常の文字に近い見た目にします。
-      const defs=document.createElementNS("http://www.w3.org/2000/svg","defs");
-      const filter=document.createElementNS("http://www.w3.org/2000/svg","filter");
-      filter.setAttribute("id","thinStroke");
-      filter.setAttribute("x","-10%");
-      filter.setAttribute("y","-10%");
-      filter.setAttribute("width","120%");
-      filter.setAttribute("height","120%");
-      const morph=document.createElementNS("http://www.w3.org/2000/svg","feMorphology");
-      morph.setAttribute("in","SourceGraphic");
-      morph.setAttribute("operator","erode");
-      morph.setAttribute("radius","0.75");
-      filter.appendChild(morph);
-      defs.appendChild(filter);
-      svg.insertBefore(defs,svg.firstChild);
-
       const paths=Array.from(svg.querySelectorAll('[id*="StrokePaths_"] path'));
       if(!paths.length) throw new Error("stroke paths unavailable");
-
-      // KanjiVGの「書き順番号」などの補助表示は完全に取り除く。
       svg.querySelectorAll('[id*="StrokeNumbers"], text').forEach(el=>el.remove());
 
-      /* 書き順表示は「太い黒線」に見えないよう、
-         すべての画を同じ淡い色で表示し、現在の1画だけを少し見やすくします。
-         数字や太線による強調は使いません。 */
-      const GUIDE = "#6f6f6f";
-      const GUIDE_OPACITY = "0.78";
-      const ACTIVE_OPACITY = "0.78";
+      /*
+       * KanjiVGの筆画データは「線の中心線」ではなく、筆画の外形を
+       * 塗りつぶしたpathとして収録されています。そのためpathを細く
+       * しようとすると、一部の画が消えたり、横画だけが太く残ったりします。
+       * ここでは無理にpathを変形せず、通常表示はごく薄くし、アニメーション
+       * 中は「今書いている画」だけを少し濃くします。これが最も安定して
+       * すべての画を残せる方式です。
+       */
+      const GUIDE="#555";
+      const GUIDE_OPACITY="0.16";
+      const ACTIVE_OPACITY="0.72";
+      const FINISHED_OPACITY="0.28";
 
       paths.forEach(p=>{
-        p.classList.remove("strokeStep","strokeCurrent");
+        p.removeAttribute("filter");
         p.setAttribute("fill",GUIDE);
         p.setAttribute("stroke","none");
-        p.setAttribute("filter","url(#thinStroke)");
         p.style.opacity=GUIDE_OPACITY;
       });
 
-      let timer=null;
-      let runId=0;
+      let timer=null, runId=0;
+      function stopTimer(){ if(timer){clearTimeout(timer); timer=null;} }
 
       function resetOrder(){
         runId++;
-        if(timer){
-          clearTimeout(timer);
-          timer=null;
-        }
-        paths.forEach(p=>{
-          p.classList.remove("strokeStep","strokeCurrent");
-          p.setAttribute("fill",GUIDE);
-          p.style.opacity=GUIDE_OPACITY;
-        });
+        stopTimer();
+        paths.forEach(p=>{p.style.opacity=GUIDE_OPACITY;});
         if(status) status.textContent="1画ずつ、順番に見ていきます。";
         orderButton.disabled=false;
         orderButton.textContent="▶ 書き順を見る";
@@ -464,55 +439,39 @@ function renderStudy(item,d){
       orderButton.onclick=()=>{
         runId++;
         const thisRun=runId;
-        if(timer) clearTimeout(timer);
-        timer=null;
-
-        // 最初は全画を非表示にして、1画ずつ自然に現す。
+        stopTimer();
         paths.forEach(p=>{
-          p.classList.remove("strokeStep","strokeCurrent");
           p.setAttribute("fill",GUIDE);
           p.style.opacity="0";
         });
-
         let i=0;
         orderButton.disabled=true;
         orderButton.textContent="書き順を表示中…";
 
         function showNext(){
           if(thisRun!==runId) return;
-
           if(i < paths.length){
-            // すべての画を同じ色・同じ太さで残し、1画ずつ、順番に見ていきます。
-            if(i>0){
-              paths[i-1].classList.remove("strokeCurrent");
-              paths[i-1].classList.add("strokeStep");
-            }
-            paths[i].classList.remove("strokeStep","strokeCurrent");
-            paths[i].setAttribute("fill",GUIDE);
+            if(i>0) paths[i-1].style.opacity=FINISHED_OPACITY;
             paths[i].style.opacity=ACTIVE_OPACITY;
             if(status){
-              const circled = i < 20 ? String.fromCodePoint(0x2460+i) : `${i+1}`;
+              const circled=i<20?String.fromCodePoint(0x2460+i):`${i+1}`;
               status.textContent=`${circled} ${i+1}画目を書きます`;
             }
             i++;
-            timer=setTimeout(showNext,850);
+            timer=setTimeout(showNext,700);
           }else{
-            paths.forEach(p=>{
-              p.classList.remove("strokeCurrent");
-              p.classList.add("strokeStep");
-              p.style.opacity=GUIDE_OPACITY;
-              p.setAttribute("fill",GUIDE);
-            });
+            paths.forEach(p=>p.style.opacity=FINISHED_OPACITY);
             if(status) status.textContent="書き順はおしまいです。もう一度見ることもできます。";
             orderButton.disabled=false;
             orderButton.textContent="↻ もう一度見る";
             timer=null;
           }
         }
-
         showNext();
       };
 
+      // 初期状態は薄い下書き。書き順を見ると1画ずつ濃く表示。
+      resetOrder();
     }catch(error){
       console.warn("書き順データを読み込めませんでした。",error);
       orderButton.disabled=true;
