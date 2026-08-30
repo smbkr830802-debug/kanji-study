@@ -416,7 +416,7 @@ function renderStudy(item,d){
       const morph=document.createElementNS("http://www.w3.org/2000/svg","feMorphology");
       morph.setAttribute("in","SourceGraphic");
       morph.setAttribute("operator","erode");
-      morph.setAttribute("radius","0.28");
+      morph.setAttribute("radius","0.75");
       filter.appendChild(morph);
       defs.appendChild(filter);
       svg.insertBefore(defs,svg.firstChild);
@@ -431,8 +431,8 @@ function renderStudy(item,d){
          すべての画を同じ淡い色で表示し、現在の1画だけを少し見やすくします。
          数字や太線による強調は使いません。 */
       const GUIDE = "#6f6f6f";
-      const GUIDE_OPACITY = "0.68";
-      const ACTIVE_OPACITY = "0.68";
+      const GUIDE_OPACITY = "0.78";
+      const ACTIVE_OPACITY = "0.78";
 
       paths.forEach(p=>{
         p.classList.remove("strokeStep","strokeCurrent");
